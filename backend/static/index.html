@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#13233d"><title>Karna OS · Evidence before action</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body data-view="home">
+<aside>
+  <div class="sun-mark" aria-hidden="true"><span>↑</span></div>
+  <div class="brand">KARNA <b>OS</b></div>
+  <p class="tag">Built on evidence.<br>Driven by purpose.</p>
+  <nav aria-label="Primary">
+    <small>FOUNDATION</small>
+    <button data-v="home"><i>◈</i><span>Overview</span></button>
+    <button data-v="profile"><i>◎</i><span>Career Profile</span></button>
+    <button data-v="evidence"><i>⬡</i><span>Evidence Armour</span></button>
+    <small>DISCOVER & DECIDE</small>
+    <button data-v="sources"><i>⌖</i><span>Job Discovery</span></button>
+    <button data-v="matches"><i>➶</i><span>Match Inbox</span></button>
+    <button data-v="shortlist"><i>◇</i><span>Shortlist</span></button>
+    <small>PREPARE & PROGRESS</small>
+    <button data-v="studio"><i>✦</i><span>Application Studio</span></button>
+    <button data-v="journey"><i>◉</i><span>Career Journey</span></button>
+    <button data-v="insights"><i>▥</i><span>Insights</span></button>
+    <button data-v="settings"><i>⚙</i><span>Continuity & Data</span></button>
+  </nav>
+  <div class="aside-foot"><small>Karna OS v1.1</small><strong>Continuity release</strong></div>
+</aside>
+<main>
+  <div class="motion-orb" aria-hidden="true"></div>
+  <header>
+    <div><div class="eyebrow">CAREER INTELLIGENCE</div><h1 id="title">Overview</h1><p id="subtitle">See the field before choosing the path.</p></div>
+    <div class="header-actions"><button class="danger" id="deleteAccountBtn" hidden>Delete account</button><button class="secondary" id="logoutBtn" hidden>Sign out</button><button class="icon-button" id="notifyBtn" title="Notifications">●<b id="notifyCount">0</b></button><div class="health"><i></i><span>System ready</span></div></div>
+  </header>
+  <section id="content" aria-live="polite"></section>
+</main>
+<div id="toast" role="status"></div>
+<div id="modal" class="modal hidden" role="dialog" aria-modal="true"><div class="modal-card"><button class="close" onclick="closeModal()" aria-label="Close">×</button><div id="modalBody"></div></div></div>
+<script src="/static/app.js"></script>
+<script src="/static/app-v04.js"></script>
+<script src="/static/app-v11.js"></script>
+</body></html>

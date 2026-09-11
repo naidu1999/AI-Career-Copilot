@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#384959">
+<meta property="og:title" content="Karna OS — Don't chase job boards. Out-prepare the competition.">
+<meta property="og:description" content="Local-first career OS: explained job matches, evidence-grounded documents, Interview Studio and free-first AI routing. Your resume never leaves your machine.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<link rel="icon" type="image/svg+xml" href="/static/landing/favicon.svg">
+<meta name="description" content="Karna OS is the local-first career operating system: explained job matches, evidence-grounded documents, Interview Studio and free-first AI routing. You stay in control of every application.">
+<title>Karna OS | Don't chase job boards. Out-prepare the competition.</title>
+<link rel="stylesheet" href="/static/landing/landing.css">
+</head>
+<body>
+<div id="scrollBar" aria-hidden="true"></div>
+
+<div class="announce" role="marquee">
+  <div class="announce-track">
+    <span>✦ Every match score fully explained</span>
+    <span>✦ Your resume never leaves your machine</span>
+    <span>✦ Interview answers drafted from your own wins</span>
+    <span>✦ Free-first AI with local fallback</span>
+    <span>✦ Zero auto-submissions — you are always the sender</span>
+  </div>
+</div>
+
+<header class="site-head">
+  <a class="brand" href="/"><span class="sun-mark" aria-hidden="true">↑</span>KARNA <b>OS</b></a>
+  <nav class="head-nav" aria-label="Primary">
+    <a href="#matching">Matching</a>
+    <a href="#studio">Interview Studio</a>
+    <a href="#router">AI Router</a>
+    <a href="#how">How it works</a>
+    <a href="#why">Why Karna</a>
+    <a href="#faq">FAQ</a>
+  </nav>
+  <div class="head-actions">
+    <a class="btn ghost" href="/app">Sign in</a>
+    <a class="btn primary" href="/app">Open dashboard</a>
+  </div>
+  <button class="menu-btn" id="menuBtn" aria-label="Open menu" aria-expanded="false">☰</button>
+</header>
+<div class="mobile-nav" id="mobileNav" hidden>
+  <a href="#matching">Matching</a><a href="#studio">Interview Studio</a><a href="#router">AI Router</a>
+  <a href="#how">How it works</a><a href="#why">Why Karna</a><a href="#faq">FAQ</a><a href="/app">Open dashboard</a>
+</div>
+
+<main>
+
+<!-- ============ HERO ============ -->
+<section class="hero">
+  <canvas id="heroCanvas" aria-hidden="true"></canvas>
+  <div class="blob b1" aria-hidden="true"></div>
+  <div class="blob b2" aria-hidden="true"></div>
+  <div class="blob b3" aria-hidden="true"></div>
+  <div class="cursor-glow" id="cursorGlow" aria-hidden="true"></div>
+  <div class="hero-scene" aria-hidden="true">
+    <div class="par fc-a"><div class="f-card"><div class="mini-job"><span class="mini-ring" style="--score:82"><span>82</span></span><div><b>Senior Backend Engineer</b><span>Northwind · Remote</span></div></div></div></div>
+    <div class="par fc-b"><div class="f-card"><div class="doc-line"><i>📄</i> Tailored · Data Analyst</div><div class="doc-lines"><i></i><i></i><i></i></div></div></div></div>
+    <div class="par fc-c"><div class="f-card"><div class="chat-bubble">“Tell me about a time you led under pressure.”</div><div class="chat-who"><span class="avatar">KC</span> Interview Coach</div></div></div></div>
+    <div class="par fc-d"><div class="f-card"><div class="mini-job"><span class="mini-ring" style="--score:91"><span>91</span></span><div><b>Product Manager</b><span>Corebank · Hybrid</span></div></div></div></div>
+    <div class="par medal-left"><svg width="86" height="110" viewBox="0 0 86 110"><defs><linearGradient id="mg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#88bdf2"/><stop offset="1" stop-color="#384959"/></linearGradient></defs><path d="M30 62 L18 104 L38 92 L46 108 L56 66" fill="#bdddfc"/><path d="M56 62 L68 104 L48 92 L40 108 L30 66" fill="#6a9fd8"/><circle cx="43" cy="38" r="30" fill="#fff" stroke="#c9dcf0" stroke-width="3"/><circle cx="43" cy="38" r="22" fill="url(#mg1)"/><text x="43" y="46" text-anchor="middle" font-size="20" fill="#fff" font-family="Georgia">★</text></svg></div>
+    <div class="par medal-right"><svg width="86" height="110" viewBox="0 0 86 110"><defs><linearGradient id="mg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6a89a7"/><stop offset="1" stop-color="#2e9e7e"/></linearGradient></defs><path d="M30 62 L18 104 L38 92 L46 108 L56 66" fill="#d9e7f6"/><path d="M56 62 L68 104 L48 92 L40 108 L30 66" fill="#88bdf2"/><circle cx="43" cy="38" r="30" fill="#fff" stroke="#c9dcf0" stroke-width="3"/><circle cx="43" cy="38" r="22" fill="url(#mg2)"/><text x="43" y="46" text-anchor="middle" font-size="20" fill="#fff" font-family="Georgia">✓</text></svg></div>
+  </div>
+  <div class="hero-inner">
+    <p class="eyebrow">YOUR CAREER OPERATING SYSTEM</p>
+    <h1>Don't chase job boards.<br><em>Out-prepare the competition.</em></h1>
+    <p class="hero-sub">Karna OS turns your resume into a verified profile, finds the right openings across nine
+      job sources, and walks you into every interview prepared — while you stay in control of every application.</p>
+    <div class="cta-row">
+      <a class="btn primary big" href="/app">Build my profile — free</a>
+      <a class="btn ghost big" href="#how">See how it works</a>
+    </div>
+
+    <div class="hero-widget" aria-label="Match Inbox preview">
+      <div class="widget-head">
+        <div class="counters">
+          <div><b id="matchTotal">0</b><span>matches scored all-time</span></div>
+          <div><b id="matchToday">0</b><span>found today</span></div>
+          <div><b>0</b><span>auto-submissions · always</span></div>
+        </div>
+      </div>
+      <div class="widget-card" id="matchCard">
+        <div class="ring" id="matchRing" style="--score:0"><span id="matchScore">0</span></div>
+        <div class="widget-job">
+          <strong id="matchTitle">Senior Backend Engineer</strong>
+          <span id="matchMeta">Northwind · Remote (IN) · posted 6h ago</span>
+          <span class="verdict qualified" id="matchVerdict">QUALIFIED</span>
+        </div>
+        <div class="widget-verdicts">
+          <span class="v-btn pass">✓ Qualify</span>
+          <span class="v-btn review">◔ Review</span>
+          <span class="v-btn reject">✕ Reject</span>
+        </div>
+      </div>
+      <p class="widget-hint">Karna scores every opening against <b>your</b> profile and shows exactly why.
+        You decide what happens next — it never applies on its own.</p>
+    </div>
+
+    <div class="hero-meta">
+      <span>★★★★★ Built for job seekers, not recruiters</span>
+      <span>·</span><span>9 documented job sources</span>
+      <span>·</span><span>100% local resume storage</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SOURCES ============ -->
+<section class="sources reveal">
+  <p class="sources-label">FINDS OPENINGS ON</p>
+  <div class="sources-grid">
+    <span>Greenhouse</span><span>Lever</span><span>Ashby</span><span>SmartRecruiters</span>
+    <span>Recruitee</span><span>Arbeitnow</span><span>Adzuna</span><span>Jooble</span><span>USAJOBS</span>
+  </div>
+</section>
+
+<!-- ============ FEATURE 1 · MATCHING ============ -->
+<section class="feature" id="matching">
+  <div class="feature-copy reveal">
+    <p class="eyebrow">EXPLAINABLE MATCHING</p>
+    <h2>Know why you qualify — before you apply.</h2>
+    <p>A score without a reason is a guess. Karna checks every opening against your real profile —
+      job family, seniority, skills, location, work authorization — and shows its work.</p>
+    <ul class="ticks">
+      <li>Deduplicates the same vacancy across boards and ATS sites</li>
+      <li>Strict mode separates “qualified” from “needs your judgement”</li>
+      <li>Freshness windows, source health and cooldowns handled for you</li>
+    </ul>
+    <div class="demo-controls" role="group" aria-label="Matching demo controls">
+      <button class="chip on" data-role="software">Software Engineer</button>
+      <button class="chip" data-role="data">Data Analyst</button>
+      <button class="chip" data-role="pm">Product Manager</button>
+      <label class="strict-toggle"><input type="checkbox" id="strictToggle"> Strict mode</label>
+    </div>
+  </div>
+  <div class="feature-visual reveal">
+    <div class="match-panel">
+      <div class="panel-head"><span class="dot"></span>Match Inspector <b id="panelJob">Senior Backend Engineer · Northwind</b></div>
+      <div class="panel-body">
+        <div class="ring big" id="panelRing" style="--score:0"><span id="panelScore">0</span></div>
+        <ul class="checklist" id="panelChecks"></ul>
+      </div>
+      <div class="panel-foot"><span class="verdict qualified" id="panelVerdict">QUALIFIED</span>
+        <span class="small" id="panelNote">Meets every strict gate — shortlist it.</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FEATURE 2 · INTERVIEW STUDIO ============ -->
+<section class="feature alt" id="studio">
+  <div class="feature-visual reveal">
+    <div class="studio-panel">
+      <div class="panel-head"><span class="dot"></span>Interview Studio · Senior-recruiter coaching</div>
+      <div class="studio-question" id="studioQuestion">“Tell me about a time you led under pressure.”</div>
+      <div class="studio-answer" id="studioAnswer" aria-live="polite"></div>
+      <p class="studio-foot">Grounded in your own verified projects, metrics and wins. Nothing invented.</p>
+    </div>
+  </div>
+  <div class="feature-copy reveal">
+    <p class="eyebrow">INTERVIEW STUDIO</p>
+    <h2>Walk in ready. Not lucky.</h2>
+    <p>Pick a question your shortlisted job is likely to ask. Karna drafts a STAR answer from the projects
+      you verified, then a senior-recruiter pass sharpens it. You rehearse before the big day — not during it.</p>
+    <div class="q-list" role="group" aria-label="Sample interview questions">
+      <button class="q on">“Tell me about a time you led under pressure.”</button>
+      <button class="q">“Why do you want this role?”</button>
+      <button class="q">“Describe a conflict with a teammate.”</button>
+      <button class="q">“What is your biggest professional win?”</button>
+    </div>
+    <a class="btn dark" href="/app">Try Interview Studio</a>
+  </div>
+</section>
+
+<!-- ============ FEATURE 3 · AI ROUTER ============ -->
+<section class="feature copy-right" id="router">
+  <div class="feature-copy reveal">
+    <p class="eyebrow">AI CONTINUITY ROUTER</p>
+    <h2>Smart AI. Free-first. Zero lock-in.</h2>
+    <p>Summaries, tailoring and coaching run down a priority chain you control — local models first,
+      your free cloud keys next, paid engines only if you allow them. No AI keys at all? Matching still works.</p>
+    <ul class="ticks">
+      <li>Rate-limit handling, cooldowns and circuit breakers built in</li>
+      <li>Health, latency and failure stats visible per provider</li>
+      <li>Your data goes only where you point it</li>
+    </ul>
+    <button class="btn primary" id="routerRun">Run an AI task ▸</button>
+  </div>
+  <div class="feature-visual reveal">
+    <div class="router-panel">
+      <div class="panel-head"><span class="dot"></span>Task: tailor resume for “Data Analyst · Fintrail”</div>
+      <div class="router-chain" id="routerChain">
+        <div class="provider" data-state="idle"><i>L</i><div><strong>Ollama</strong><span>local · qwen2.5</span></div><b class="p-state">idle</b></div>
+        <div class="provider" data-state="idle"><i>G</i><div><strong>Gemini</strong><span>cloud · free tier</span></div><b class="p-state">idle</b></div>
+        <div class="provider" data-state="idle"><i>R</i><div><strong>OpenRouter</strong><span>cloud · fallback</span></div><b class="p-state">idle</b></div>
+      </div>
+      <div class="router-log" id="routerLog">Press “Run an AI task” to watch the failover chain.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ HOW IT WORKS ============ -->
+<section class="how" id="how">
+  <div class="section-head reveal">
+    <p class="eyebrow">HOW IT WORKS</p>
+    <h2>Three steps to interview-ready.</h2>
+    <p>Karna OS runs the busywork. You make every decision — and every final click.</p>
+  </div>
+  <div class="steps">
+    <div class="step reveal"><b>1</b><h3>Build your evidence profile</h3><p>Upload your resume once and verify your real projects and wins. Karna builds a profile that only claims what you can prove.</p></div>
+    <div class="step reveal"><b>2</b><h3>Get explained matches</h3><p>Nine documented job sources, deduplicated and scored against your profile — with reasons attached, not mystery numbers.</p></div>
+    <div class="step reveal"><b>3</b><h3>Prepare, then send</h3><p>Export tailored resumes and cover letters, rehearse STAR answers, and press submit on the official portal yourself.</p></div>
+  </div>
+</section>
+
+<!-- ============ STATS ============ -->
+<section class="stats reveal">
+  <div class="stat"><b data-count="9">0</b><span>job sources with documented endpoints</span></div>
+  <div class="stat"><b data-count="40" data-suffix="+">0</b><span>explainable rule checks per match</span></div>
+  <div class="stat"><b data-count="100" data-suffix="%">0</b><span>local resume storage in personal mode</span></div>
+  <div class="stat"><b>0</b><span>auto-submitted applications. Ever.</span></div>
+</section>
+
+<!-- ============ HONEST DIFFERENTIATOR (no fake reviews — features speak) ============ -->
+<section class="reviews" id="why">
+  <div class="section-head reveal">
+    <p class="eyebrow">WHY KARNA OS</p>
+    <h2>Most tools apply for you. This one makes you better.</h2>
+    <p>Auto-apply bots flood portals with identical resumes — and get ignored. Karna OS takes the opposite bet: fewer, better, fully-prepared applications.</p>
+  </div>
+  <div class="steps">
+    <div class="step reveal"><b>1</b><h3>Explained, not black-box</h3><p>Every match shows the exact rules it passed and failed. If a score says 72, you can see where every point comes from.</p></div>
+    <div class="step reveal"><b>2</b><h3>Local, not uploaded</h3><p>Your resume and career data live in a database on your own machine. No account required, no cloud copy in personal mode.</p></div>
+    <div class="step reveal"><b>3</b><h3>Prepared, not spammed</h3><p>Tailored documents, rehearsed answers, and you pressing send on the official portal. Slower per application — dramatically better per application.</p></div>
+  </div>
+</section>
+
+<!-- ============ FAQ ============ -->
+<section class="faq" id="faq">
+  <div class="section-head reveal">
+    <p class="eyebrow">FAQ</p>
+    <h2>Questions, answered.</h2>
+  </div>
+  <div class="faq-list reveal">
+    <details open><summary>Does Karna OS apply to jobs for me?</summary><p>No — deliberately. Karna discovers permitted job metadata, matches and prepares documents, then opens the official portal so <b>you</b> submit. Automatic submission is disabled by design, which keeps your accounts safe and every application intentional.</p></details>
+    <details><summary>What is “explainable” matching?</summary><p>Matching Engine v4 runs deterministic, auditable rules — job family, title, seniority, experience, location, work authorization, sponsorship and mandatory skills. Each match shows which checks passed or failed, so a 72% is never a mystery number.</p></details>
+    <details><summary>Where does my resume and data go?</summary><p>In personal mode everything stays in a local SQLite database on your computer. Cloud AI receives content only when you trigger an AI feature and have configured that provider. Verified backups and full JSON export are built in.</p></details>
+    <details><summary>Which job boards are supported?</summary><p>Nine documented sources: Greenhouse, Lever, Ashby, SmartRecruiters, Recruitee and Arbeitnow need no key; Adzuna and Jooble use your own free credentials; USAJOBS is optional. Only documented JSON endpoints are used — no scraping.</p></details>
+    <details><summary>Do I need to pay for AI?</summary><p>No. The default is free-first: run Ollama locally, or add your own free-tier keys. Paid providers stay disabled unless you explicitly allow them per task in the AI Continuity Router.</p></details>
+    <details><summary>Will this get my profiles flagged?</summary><p>Karna never automates the portals themselves — it reads public, documented endpoints and hands you the official link. From the portal's point of view, you are just a person applying.</p></details>
+  </div>
+</section>
+
+<!-- ============ FINAL CTA ============ -->
+<section class="final-cta">
+  <div class="cta-card">
+    <div class="cta-blob cb1" aria-hidden="true"></div>
+    <div class="cta-blob cb2" aria-hidden="true"></div>
+    <h2 class="reveal">Your next offer starts today.</h2>
+    <p class="reveal">Let Karna OS find the right openings, explain why you fit, and walk you in prepared.</p>
+    <div class="cta-row center reveal">
+      <a class="btn white big" href="/app">Open the dashboard</a>
+      <a class="btn on-grad big" href="#matching">See matching in action</a>
+    </div>
+    <p class="cta-fine reveal">Local-first · Works without any AI keys · Windows, macOS &amp; Linux</p>
+  </div>
+</section>
+
+</main>
+
+<footer class="site-foot">
+  <div class="foot-grid">
+    <div class="foot-brand">
+      <a class="brand" href="/"><span class="sun-mark" aria-hidden="true">↑</span>KARNA <b>OS</b></a>
+      <p>Built on evidence. Driven by purpose. A personal, local-first career operating system.</p>
+    </div>
+    <div><h4>Product</h4><a href="/app">Dashboard</a><a href="#matching">Job Discovery</a><a href="#studio">Interview Studio</a><a href="#router">AI Router</a></div>
+    <div><h4>Legal</h4><a href="/static/privacy.html">Privacy policy</a><a href="/static/terms.html">Terms of use</a><a href="/static/limitations.html">Known limitations</a></div>
+  </div>
+  <p class="foot-fine">Karna OS assists with discovery, evaluation and preparation. It does not submit applications
+    automatically and does not guarantee employment outcomes. © <span id="year"></span> Karna OS · v1.1 Continuity release.</p>
+</footer>
+
+<script>
+/* 3D scene lazy-loads after first paint so it never blocks the page */
+(function(){
+  var loaded=false;
+  function boot(){
+    if(loaded)return;loaded=true;
+    var s=document.createElement('script');s.src="/static/landing/vendor/three.min.js";s.defer=true;
+    s.onload=function(){var t=document.createElement('script');t.src="/static/landing/landing3d.js";t.defer=true;document.body.appendChild(t);};
+    document.body.appendChild(s);
+  }
+  if('requestIdleCallback' in window){requestIdleCallback(boot,{timeout:1800});}else{setTimeout(boot,1200);}
+})();
+</script>
+</body>
+</html>

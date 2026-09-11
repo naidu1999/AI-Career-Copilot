@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: karna-os
+    runtime: docker
+    plan: starter
+    healthCheckPath: /api/health
+    autoDeploy: false
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DEPLOYMENT_MODE
+        value: hosted
+      - key: SESSION_COOKIE_SECURE
+        value: true
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: CRON_SECRET
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: HOST
+        value: 0.0.0.0
+      - key: SCAN_ENABLED
+        value: false
+      - key: DATABASE_PATH
+        value: /app/data/karna_os.db
+      - key: UPLOAD_DIR
+        value: /app/data/uploads
+      - key: BACKUP_DIR
+        value: /app/data/backups
+    disk:
+      name: karna-data
+      mountPath: /app/data
+      sizeGB: 1
