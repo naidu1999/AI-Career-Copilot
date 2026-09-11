@@ -85,9 +85,24 @@
     obj.userData.rot = rotSpeed || 0;
     obj.userData.phase = Math.random() * Math.PI * 2;
     obj.userData.baseY = y;
+    obj.userData.baseX = x;
     world.add(obj);
     items.push(obj);
     return obj;
+  }
+
+  /* Responsive spread: on narrower screens push objects toward the edges and
+     shrink them so the headline text always stays readable. */
+  function layoutScene() {
+    var w = hero.clientWidth, h = hero.clientHeight;
+    if (!w || !h) { return; }
+    var aspect = w / h;
+    var xFactor = Math.max(1, 1.85 / aspect);          /* narrow => further out */
+    var s = Math.max(0.52, Math.min(1, aspect / 1.7)); /* narrow => smaller */
+    world.scale.set(s, s, s);
+    for (var i = 0; i < items.length; i++) {
+      items[i].position.x = items[i].userData.baseX * xFactor;
+    }
   }
 
   /* ---------- LAPTOP ---------- */
@@ -218,8 +233,9 @@
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
   }
-  window.addEventListener("resize", resize);
+  window.addEventListener("resize", function () { resize(); layoutScene(); });
   resize();
+  layoutScene();
 
   var visible = true;
   if ("IntersectionObserver" in window) {
