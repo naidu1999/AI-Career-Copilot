@@ -172,10 +172,14 @@ class InterviewProgress(BaseModel):completed:bool
 class Credentials(BaseModel):email:str;password:str=Field(min_length=8,max_length=128)
 class DeleteAccount(BaseModel):confirmation:str
 
+def no_cache():
+	"""Cache-busting headers for HTML entry pages so edits show up on plain reload."""
+	return {"Cache-Control":"no-store, must-revalidate", "Pragma":"no-cache", "Expires":"0"}
+
 @app.get("/",include_in_schema=False)
-def landing():return FileResponse(static/"landing"/"index.html")
+def landing():return FileResponse(static/"landing"/"index.html", headers=no_cache())
 @app.get("/app",include_in_schema=False)
-def dashboard():return FileResponse(static/"index.html")
+def dashboard():return FileResponse(static/"index.html", headers=no_cache())
 @app.get("/api/health")
 def health():
     db_ok=rows("PRAGMA quick_check")[0].get("quick_check")=="ok"
