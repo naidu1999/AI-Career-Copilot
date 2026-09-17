@@ -11,7 +11,7 @@ import httpx
 from backend.core.config_new import settings
 from backend.db.local import execute, now, rows, uid
 
-TASKS=("resume-extraction","evidence-normalization","recruiter-review","tailor","cover-letter","interview-prep","star-coach","summary")
+TASKS=("resume-extraction","evidence-normalization","recruiter-review","tailor","cover-letter","interview-prep","star-coach","summary","dossier")
 
 @dataclass
 class Provider:

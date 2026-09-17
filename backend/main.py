@@ -24,6 +24,7 @@ from backend.jobs.providers import GLOBAL_PROVIDERS, PROVIDERS, canonical_key, f
 from backend.services.ai_router import AIRouter, router_status
 from backend.services.continuity import enqueue, status as sync_status, sync_pending
 from backend.services.discovery import recalculate, scan
+from backend.services.dossier import basic_dossier, dossier_prompt, legitimacy_check, parse_dossier_json
 from backend.services.document_service import SUPPORTED, extract_text, file_hash, safe_filename, valid_signature
 from backend.services.profile_parser import parse_resume
 from backend.services.auth_service import authenticate, current_user_id, delete_auth_user, hosted, password_action, revoke, user_id
@@ -538,6 +539,7 @@ async def ai_generate(kind:str,request:AIRequest):
       "cover-letter":"Draft a concise, human cover letter grounded only in verified evidence. Do not invent experience.",
       "interview-prep":"Create technical, behavioural, and project questions, answer frameworks, likely weak areas, and a two-day study plan.",
       "recruiter-review":"Act as the first screening and hiring review. Return: verdict (strong fit, possible fit, or weak fit); mandatory requirement check; preferred requirement check; evidence-backed strengths; gaps and risks; likely recruiter objections; exact resume improvements; screening questions with truthful answer guidance; and the three highest-value next actions. Do not turn the verdict into a hiring probability.",
+      "application-email":"Draft a formal application email to a recruiter or hiring manager. Return: a subject line; a 120-180 word body with source-grounded fit points (no invented claims); an attachment checklist; and a sign-off block using the candidate's name and contact details from the profile when available. This is a draft only; the user will copy it into their own email client.",
     }
     profile=get_profile_data()
     prompt=f"TASK: {templates[kind]}\n{recruiter_context(jobs[0],profile,verified)}\nJOB: {json.dumps(jobs[0])}\nSOURCE RESUME: {resumes[0]['extracted_text'] if resumes else 'Not supplied'}\nUSER INSTRUCTIONS: {request.instructions}"
@@ -553,6 +555,8 @@ async def cover_letter(request:AIRequest):return await ai_generate("cover-letter
 async def interview_prep(request:AIRequest):return await ai_generate("interview-prep",request)
 @app.post("/api/ai/recruiter-review")
 async def recruiter_review(request:AIRequest):return await ai_generate("recruiter-review",request)
+@app.post("/api/ai/application-email")
+async def application_email(request:AIRequest):return await ai_generate("application-email",request)
 @app.get("/api/ai/router")
 def ai_router_status():return router_status(user_id())
 @app.put("/api/ai/routes/{task}")
@@ -605,3 +609,101 @@ def update_interview_progress(iid:str,item:InterviewProgress):
     execute("UPDATE interview_prep SET completed=?,updated_at=? WHERE id=? AND owner_id=?",(int(item.completed),now(),iid,user_id()));return {"ok":True}
 @app.delete("/api/interview/items/{iid}")
 def delete_interview_item(iid:str):execute("DELETE FROM interview_prep WHERE id=? AND owner_id=?",(iid,user_id()));return {"ok":True}
+
+# ── Fit Dossier: deep per-job evaluation ─────────────────────────────
+@app.get("/api/dossier/{job_id}")
+def get_dossier(job_id:str):
+    latest=rows("SELECT * FROM fit_dossiers WHERE owner_id=? AND job_id=? ORDER BY created_at DESC LIMIT 1",(user_id(),job_id))
+    if not latest:return {"dossier":None}
+    d=latest[0]
+    return {"dossier":{"id":d["id"],"global_score":d["global_score"],"verdict":d["verdict"],"dimensions":json.loads(d["dimensions"]),"requirements":json.loads(d["requirement_weights"]),"legitimacy":json.loads(d["legitimacy"]),"interview_focus":json.loads(d["interview_focus"]),"recommended_actions":json.loads(d["recommended_actions"]),"model":d["model"],"source":d["source"],"created_at":d["created_at"]}}
+
+@app.post("/api/dossier/{job_id}",status_code=201)
+async def generate_dossier(job_id:str):
+    """Holistic deep evaluation. AI when configured; honest deterministic fallback otherwise."""
+    jobrows=rows("SELECT j.* FROM jobs j JOIN job_matches m ON m.job_id=j.id WHERE j.id=? AND m.profile_id=?",(job_id,user_id()))
+    if not jobrows:
+        jobrows=rows("SELECT * FROM jobs WHERE id=?",(job_id,))
+    if not jobrows:raise HTTPException(404,"Job not found")
+    job=dict(jobrows[0]);profile=get_profile_data()
+    matches=rows("SELECT * FROM job_matches WHERE profile_id=? AND job_id=? ORDER BY created_at DESC LIMIT 1",(user_id(),job_id))
+    match=dict(matches[0]) if matches else None
+    if match:
+        for field in ("matched_skills","missing_skills","reasons","components","blockers"):
+            try:match[field]=json.loads(match.get(field) or "[]")
+            except json.JSONDecodeError:match[field]=[]
+    verified=rows("SELECT category,normalized_value,original_text FROM career_evidence WHERE profile_id=? AND verification_status='verified'",(user_id(),))
+    stories=rows("SELECT title,category,situation,task,action,result FROM story_bank WHERE owner_id=? AND status='ready' ORDER BY updated_at DESC",(user_id(),))
+    model="";parsed=None
+    try:
+        gateway=AIRouter(user_id())
+        if gateway.enabled:
+            result=await gateway.chat("dossier",[{"role":"system","content":"Return only the JSON object specified by the user."},{"role":"user","content":dossier_prompt(job,profile,verified,stories,match)}])
+            parsed=parse_dossier_json(result["content"])
+            if parsed:model=result["model"]
+    except RuntimeError:parsed=None
+    if not parsed:
+        parsed=basic_dossier(job,profile,match);model=model or ""
+    legitimacy=legitimacy_check(job);source="ai" if model else "basic"
+    did=uid();stamp=now()
+    execute("INSERT INTO fit_dossiers (id,owner_id,job_id,global_score,verdict,dimensions,requirement_weights,legitimacy,interview_focus,recommended_actions,model,source,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (did,user_id(),job_id,parsed["global_score"],parsed["verdict"],json.dumps(parsed["dimensions"]),json.dumps(parsed["requirements"]),json.dumps(legitimacy),json.dumps(parsed["interview_focus"]),json.dumps(parsed["recommended_actions"]),model,source,stamp))
+    return {"dossier":{"id":did,"global_score":parsed["global_score"],"verdict":parsed["verdict"],"dimensions":parsed["dimensions"],"requirements":parsed["requirements"],"legitimacy":legitimacy,"interview_focus":parsed["interview_focus"],"recommended_actions":parsed["recommended_actions"],"model":model,"source":source,"created_at":stamp}}
+
+# ── Story Bank: master STAR stories reused across every evaluation ───
+@app.get("/api/stories")
+def list_stories():
+    items=rows("SELECT * FROM story_bank WHERE owner_id=? ORDER BY updated_at DESC",(user_id(),))
+    for s in items:s["tags"]=json.loads(s.get("tags") or "[]")
+    return items
+
+class StoryItem(BaseModel):
+    title:str;category:str="general";situation:str="";task:str="";action:str="";result:str="";reflection:str="";tags:list[str]=[];status:str="draft"
+
+@app.post("/api/stories",status_code=201)
+def create_story(item:StoryItem):
+    sid=uid();stamp=now()
+    execute("INSERT INTO story_bank (id,owner_id,title,category,situation,task,action,result,reflection,tags,status,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            (sid,user_id(),item.title.strip()[:120],item.category.strip()[:40] or "general",item.situation.strip(),item.task.strip(),item.action.strip(),item.result.strip(),item.reflection.strip(),json.dumps([t.strip()[:30] for t in item.tags if t.strip()][:8]),"ready" if item.status=="ready" else "draft",stamp,stamp))
+    return {"id":sid}
+
+@app.put("/api/stories/{sid}")
+def update_story(sid:str,item:StoryItem):
+    if not rows("SELECT id FROM story_bank WHERE id=? AND owner_id=?",(sid,user_id())):raise HTTPException(404,"Story not found")
+    execute("UPDATE story_bank SET title=?,category=?,situation=?,task=?,action=?,result=?,reflection=?,tags=?,status=?,updated_at=? WHERE id=? AND owner_id=?",
+            (item.title.strip()[:120],item.category.strip()[:40] or "general",item.situation.strip(),item.task.strip(),item.action.strip(),item.result.strip(),item.reflection.strip(),json.dumps([t.strip()[:30] for t in item.tags if t.strip()][:8]),"ready" if item.status=="ready" else "draft",now(),sid,user_id()))
+    return {"ok":True}
+
+@app.delete("/api/stories/{sid}")
+def delete_story(sid:str):execute("DELETE FROM story_bank WHERE id=? AND owner_id=?",(sid,user_id()));return {"ok":True}
+
+# ── Pipeline Intel: funnel, follow-ups, ghost signals ───────────────
+@app.get("/api/pipeline/intel")
+def pipeline_intel():
+    pid=user_id()
+    funnel=rows("SELECT status,COUNT(*) count,MAX(updated_at) last_move FROM applications WHERE profile_id=? AND archived=0 GROUP BY status ORDER BY count DESC",(pid,))
+    total=sum(int(x["count"]) for x in funnel) or 0
+    reached={x["status"]:int(x["count"]) for x in funnel}
+    def stage(*names:str):return sum(reached.get(n,0) for n in names)
+    # Funnel conversion: the share of tracked applications that ever got a human response.
+    responses=stage("screening","interview","offer","accepted")
+    conversion=round(100*responses/total,1) if total else 0.0
+    overdue=[dict(x) for x in rows("""SELECT a.id,a.job_id,a.status,a.follow_up_at,a.notes,j.title,j.company FROM applications a JOIN jobs j ON j.id=a.job_id WHERE a.profile_id=? AND a.archived=0 AND a.follow_up_at IS NOT NULL AND a.follow_up_at<=? AND a.status NOT IN ('rejected','withdrawn','accepted') ORDER BY a.follow_up_at LIMIT 12""",(pid,now()))]
+    suggestions=rows("""SELECT a.id,j.title,j.company,a.status,a.updated_at FROM applications a JOIN jobs j ON j.id=a.job_id WHERE a.profile_id=? AND a.archived=0 AND a.status='applied' AND a.follow_up_at IS NULL AND a.updated_at<=datetime('now','-7 days') ORDER BY a.updated_at LIMIT 8""",(pid,))
+    ghosts=[dict(x) for x in rows("SELECT id,title,company,repost_count,duplicate_count,posted_at FROM jobs WHERE id IN (SELECT job_id FROM applications WHERE profile_id=? AND archived=0) AND (repost_count>=2 OR duplicate_count>=3) LIMIT 8",(pid,))]
+    interview_stats=rows("SELECT COUNT(*) total,SUM(completed) done,ROUND(AVG(confidence),1) avg_conf FROM interview_prep WHERE owner_id=?",(pid,))
+    stories_count=int(rows("SELECT COUNT(*) c FROM story_bank WHERE owner_id=? AND status='ready'",(pid,))[0]["c"])
+    dossiers=rows("SELECT verdict,COUNT(*) count FROM fit_dossiers WHERE owner_id=? GROUP BY verdict",(pid,))
+    return {"funnel":funnel,"total":total,"response_rate":conversion,"overdue_followups":overdue,"followup_suggestions":suggestions,"ghost_signals":ghosts,"interview":{"total":int(interview_stats[0]["total"] or 0),"completed":int(interview_stats[0]["done"] or 0),"avg_confidence":float(interview_stats[0]["avg_conf"] or 0)},"stories_ready":stories_count,"dossier_verdicts":dossiers}
+
+@app.post("/api/applications/{aid}/follow-up")
+def set_follow_up(aid:str,body:dict|None=None):
+    """Set (or snooze) the follow-up reminder without touching any other field."""
+    found=rows("SELECT id,status FROM applications WHERE id=? AND profile_id=?",(aid,user_id()))
+    if not found:raise HTTPException(404,"Application not found")
+    when=((body or {}).get("follow_up_at") or "").strip()
+    if not when:
+        from datetime import timedelta as _td
+        when=(datetime.now(timezone.utc)+_td(days=7)).isoformat()
+    execute("UPDATE applications SET follow_up_at=?,updated_at=? WHERE id=? AND profile_id=?",(when,now(),aid,user_id()))
+    return {"ok":True,"follow_up_at":when}

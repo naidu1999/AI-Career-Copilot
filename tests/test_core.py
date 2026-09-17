@@ -57,6 +57,38 @@ def test_local_multiuser_profiles(tmp_path, monkeypatch):
         assert client.get("/api/profile").json()["id"]=="default"
         assert client.delete("/api/profiles/default").status_code==400
 
+def test_dossier_storybank_and_intel(tmp_path, monkeypatch):
+    from backend.core.config_new import settings
+    monkeypatch.setattr(settings,"DATABASE_PATH",str(tmp_path/"test.db"))
+    monkeypatch.setattr(settings,"UPLOAD_DIR",str(tmp_path/"uploads"))
+    from backend.services.dossier import basic_dossier, legitimacy_check, parse_dossier_json
+    # Legitimacy is score-neutral and flags financial-scam wording.
+    scam=legitimacy_check({"provider":"adzuna","posted_at":"","repost_count":0,"duplicate_count":0,"description":"Pay registration fee. WhatsApp only.","company":"X","url":""})
+    assert scam["assessment"] in {"unclear","questionable"}
+    # An estimated requirement can never be critical; verdict parsing is strict.
+    d=parse_dossier_json('{"global_score":4.7,"verdict":"PRIORITIZE","dimensions":{},"requirements":[{"requirement":"5 yrs Rust","weight":"critical","basis":"estimated"}]}')
+    assert d["verdict"]=="prioritize" and d["requirements"][0]["weight"]=="helpful" and d["requirements"][0]["basis"]=="estimated"
+    fallback=basic_dossier({"title":"Data Scientist"},{},{"components":{"title":85},"missing_skills":["Spark"],"classification":"qualified","score":82})
+    assert 1<=fallback["global_score"]<=5 and fallback["verdict"] in {"prioritize","strong","possible","skip"}
+    with TestClient(app) as client:
+        # Story bank CRUD.
+        made=client.post("/api/stories",json={"title":"Led migration","category":"leadership","situation":"Legacy on-prem","task":"Move 40 services","action":"Phased cutover","result":"Zero downtime","status":"ready","tags":["cloud"]})
+        assert made.status_code==201
+        stories=client.get("/api/stories").json()
+        assert stories and stories[0]["title"]=="Led migration" and stories[0]["tags"]==["cloud"]
+        sid=stories[0]["id"]
+        assert client.put(f"/api/stories/{sid}",json={"title":"Led migration","status":"ready"}).status_code==200
+        # Dossier falls back to the deterministic engine when AI is unconfigured.
+        client.post("/api/jobs/manual",json={"title":"Data Scientist","company":"Acme","location":"Bengaluru","url":"https://acme.jobs/1","description":"Python, SQL"})
+        jobs=client.get("/api/jobs",params={"classification":"all","strict_date":"false","minimum_score":0,"hours":720}).json();assert jobs,"manual job should be listed"
+        dossier=client.post(f"/api/dossier/{jobs[0]['id']}")
+        assert dossier.status_code==201 and dossier.json()["dossier"]["source"]=="basic"
+        assert client.get(f"/api/dossier/{jobs[0]['id']}").json()["dossier"]["verdict"] in {"prioritize","strong","possible","skip"}
+        # Pipeline intel responds with funnel structure.
+        intel=client.get("/api/pipeline/intel").json()
+        assert intel["total"]==0 and "overdue_followups" in intel and intel["stories_ready"]==1
+        assert client.delete(f"/api/stories/{sid}").status_code==200
+
 def test_v04_manual_job_match_and_application(tmp_path, monkeypatch):
     from backend.core.config_new import settings
     monkeypatch.setattr(settings,"DATABASE_PATH",str(tmp_path/"v04.db"))

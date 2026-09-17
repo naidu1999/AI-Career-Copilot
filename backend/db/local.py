@@ -121,6 +121,23 @@ CREATE TABLE IF NOT EXISTS backup_records (
 CREATE TABLE IF NOT EXISTS hidden_jobs (
  owner_id TEXT NOT NULL, job_id TEXT NOT NULL, hidden_at TEXT NOT NULL, PRIMARY KEY(owner_id,job_id)
 );
+CREATE TABLE IF NOT EXISTS fit_dossiers (
+ id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, job_id TEXT NOT NULL,
+ global_score REAL NOT NULL DEFAULT 0, verdict TEXT NOT NULL DEFAULT '',
+ dimensions TEXT NOT NULL DEFAULT '{}', requirement_weights TEXT NOT NULL DEFAULT '[]',
+ legitimacy TEXT NOT NULL DEFAULT '{}', interview_focus TEXT NOT NULL DEFAULT '[]',
+ recommended_actions TEXT NOT NULL DEFAULT '[]', model TEXT NOT NULL DEFAULT '',
+ source TEXT NOT NULL DEFAULT 'ai', created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_fit_dossiers_job ON fit_dossiers(owner_id,job_id,created_at);
+CREATE TABLE IF NOT EXISTS story_bank (
+ id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, title TEXT NOT NULL,
+ category TEXT NOT NULL DEFAULT 'general', situation TEXT NOT NULL DEFAULT '',
+ task TEXT NOT NULL DEFAULT '', action TEXT NOT NULL DEFAULT '',
+ result TEXT NOT NULL DEFAULT '', reflection TEXT NOT NULL DEFAULT '',
+ tags TEXT NOT NULL DEFAULT '[]', status TEXT NOT NULL DEFAULT 'draft',
+ created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
 """
 
 INDEXES = """
