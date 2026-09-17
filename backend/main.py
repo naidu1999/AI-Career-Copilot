@@ -438,10 +438,11 @@ def manual_job(item:ManualJob):
     recalculate(get_profile_data());return {"ok":True}
 @app.get("/api/jobs")
 def list_jobs(hours:int=48,provider:str="",classification:str="qualified",company:str="",q:str="",strict_date:bool=True,minimum_score:float=0,limit:int=200,offset:int=0):
-    profile=get_profile_data();threshold=max(minimum_score,0);cutoff=(datetime.now(timezone.utc)-timedelta(hours=max(1,hours))).isoformat()
+    profile=get_profile_data();threshold=max(minimum_score,0);cutoff=(datetime.now(timezone.utc)-timedelta(hours=max(1,hours))).isoformat() if hours>=0 else ""
     sql="SELECT j.*,m.score,m.matched_skills,m.missing_skills,m.reasons,m.classification,m.components,m.blockers,m.matcher_version FROM jobs j JOIN job_matches m ON m.job_id=j.id AND m.profile_id=? WHERE j.is_active=1 AND m.score>=? AND NOT EXISTS (SELECT 1 FROM hidden_jobs h WHERE h.owner_id=? AND h.job_id=j.id)";params=[user_id(),threshold,user_id()]
-    if strict_date:sql+=" AND j.posted_at IS NOT NULL AND j.posted_at>=?";params.append(cutoff)
-    else:sql+=" AND COALESCE(j.posted_at,j.first_seen_at)>=?";params.append(cutoff)
+    if hours>=0:
+        if strict_date:sql+=" AND j.posted_at IS NOT NULL AND j.posted_at>=?";params.append(cutoff)
+        else:sql+=" AND COALESCE(j.posted_at,j.first_seen_at)>=?";params.append(cutoff)
     if provider:sql+=" AND j.provider=?";params.append(provider)
     if classification and classification!="all":sql+=" AND m.classification=?";params.append(classification)
     if company:sql+=" AND j.company LIKE ?";params.append(f"%{company}%")

@@ -27,6 +27,13 @@ button.is-busy{position:relative;filter:saturate(.7)}button.is-busy:before{conte
 details summary{cursor:pointer;color:var(--blue);font-weight:700;margin:10px 0}
 @media(max-width:760px){.score-ring{width:60px;height:60px}.header-actions .danger,.header-actions .secondary{display:none}.source-health{grid-template-columns:1fr}.route-chip{margin-bottom:6px}}
 @media(prefers-reduced-motion:reduce){.score-ring,.scan-progress i,#toast.toast-in,#content.view-enter{animation:none!important}}
+/* Guided Start steps */
+.steps-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.step-card{display:flex;gap:12px;align-items:flex-start;padding:14px;border:1px solid rgba(74,116,152,.18);border-radius:12px;background:rgba(255,255,255,.65)}
+.step-card.done{border-color:rgba(59,155,124,.45);background:rgba(233,248,241,.6)}
+.step-num{flex:none;width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:700;background:linear-gradient(135deg,#6a89a7,#88bdf2);color:#fff}
+.step-card.done .step-num{background:linear-gradient(135deg,#3b9b7c,#6fc9ab)}
+.row.wrap{flex-wrap:wrap;gap:8px}
 /* Profile switcher chip (multi-user) */
 .profile-chip{display:inline-flex;align-items:center;gap:8px;padding:5px 12px 5px 6px;border-radius:999px;font-weight:600;font-size:13px}
 .profile-chip .chip-avatar{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#6a89a7,#88bdf2);color:#fff;font-size:11px;font-weight:700;flex:none}
