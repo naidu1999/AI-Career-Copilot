@@ -36,6 +36,27 @@ def test_application_boots_and_profile_exists(tmp_path, monkeypatch):
         assert detected.json()["provider"]=="ashby"
         assert client.post("/api/sources/detect",json={"name":"Bad","careers_url":"http://evil.test/x"}).status_code==400
 
+def test_local_multiuser_profiles(tmp_path, monkeypatch):
+    from backend.core.config_new import settings
+    monkeypatch.setattr(settings,"DATABASE_PATH",str(tmp_path/"test.db"))
+    monkeypatch.setattr(settings,"UPLOAD_DIR",str(tmp_path/"uploads"))
+    with TestClient(app) as client:
+        created=client.post("/api/profiles",json={"id":"priya","full_name":"Priya Sharma"})
+        assert created.status_code==201
+        listed=client.get("/api/profiles").json()
+        assert {"default","priya"} <= {p["id"] for p in listed}
+        switched=client.post("/api/session/profile",json={"profile_id":"priya"})
+        assert switched.status_code==200
+        assert client.get("/api/profile").json()["id"]=="priya"
+        dup=client.post("/api/profiles",json={"id":"priya"})
+        assert dup.status_code==409
+        bad=client.post("/api/profiles",json={"id":"bad id!"})
+        assert bad.status_code==422
+        gone=client.delete("/api/profiles/priya")
+        assert gone.status_code==200
+        assert client.get("/api/profile").json()["id"]=="default"
+        assert client.delete("/api/profiles/default").status_code==400
+
 def test_v04_manual_job_match_and_application(tmp_path, monkeypatch):
     from backend.core.config_new import settings
     monkeypatch.setattr(settings,"DATABASE_PATH",str(tmp_path/"v04.db"))

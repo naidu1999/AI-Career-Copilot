@@ -38,8 +38,12 @@ def decode_profile(row):
     return row
 
 def get_profile_data():
-    ensure_profile(user_id())
+    # PERF: only take the INSERT path when the row is genuinely missing — a write
+    # transaction on every GET was locking the database during scans.
     found=rows("SELECT * FROM profiles WHERE id=?",(user_id(),))
+    if not found:
+        ensure_profile(user_id())
+        found=rows("SELECT * FROM profiles WHERE id=?",(user_id(),))
     if not found: raise HTTPException(500,"Career profile was not initialized")
     return decode_profile(found[0])
 
@@ -91,6 +95,8 @@ static=Path(__file__).parent/"static"; app.mount("/static",StaticFiles(directory
 REQUEST_WINDOWS=defaultdict(deque)
 LOG=logging.getLogger("karna")
 
+PROFILE_COOKIE="karna_profile"
+
 def set_session_cookies(response:Response,data:dict):
     response.set_cookie(settings.SESSION_COOKIE_NAME,data["access_token"],httponly=True,secure=settings.SESSION_COOKIE_SECURE,samesite="lax",max_age=int(data.get("expires_in",3600)),path="/")
     if data.get("refresh_token"):
@@ -108,6 +114,12 @@ async def security_headers(request,call_next):
         while window and stamp-window[0]>60:window.popleft()
         if len(window)>=settings.RATE_LIMIT_PER_MINUTE:return JSONResponse({"detail":"Request limit reached; try again shortly"},status_code=429,headers={"Retry-After":"60"})
         window.append(stamp)
+    if not hosted() and request.url.path.startswith("/api/"):
+        # Local multi-user: honor the active-profile cookie (validated every request,
+        # so deleting a profile instantly falls back to the default one).
+        cookie_pid=request.cookies.get(PROFILE_COOKIE,"")
+        if cookie_pid and cookie_pid!="default" and rows("SELECT id FROM profiles WHERE id=?",(cookie_pid,)):
+            token_handle=current_user_id.set(cookie_pid)
     if hosted() and request.method in {"POST","PUT","PATCH","DELETE"} and request.url.path!="/api/system/scheduled-scan":
         origin=request.headers.get("origin","").rstrip("/");expected=settings.PUBLIC_BASE_URL.rstrip("/")
         if origin and expected and origin!=expected:return JSONResponse({"detail":"Untrusted request origin"},status_code=403)
@@ -121,7 +133,8 @@ async def security_headers(request,call_next):
                 account=await authenticate(refresh_data.get("access_token",""))
             pid=account.get("id")
             if not pid:raise HTTPException(401,"Invalid account")
-            ensure_profile(pid,account.get("email", ""));token_handle=current_user_id.set(pid)
+            if not rows("SELECT id FROM profiles WHERE id=?",(pid,)):ensure_profile(pid,account.get("email",""))
+            token_handle=current_user_id.set(pid)
             execute("UPDATE profiles SET last_active_at=?,first_warning_at=NULL,final_warning_at=NULL,deletion_scheduled_at=NULL WHERE id=?",(now(),pid))
         except HTTPException as exc:return JSONResponse({"detail":exc.detail},status_code=exc.status_code)
     try:response=await call_next(request)
@@ -241,6 +254,50 @@ def update_profile(p:ProfileUpdate):
     values=(p.full_name,p.email,p.current_employer,p.current_role,json.dumps(p.target_titles),json.dumps(p.skills),json.dumps(p.locations),int(p.remote_allowed),json.dumps(p.excluded_roles),json.dumps(p.excluded_employment_types),p.country,json.dumps(p.remote_countries),p.years_experience,p.relevant_experience,p.minimum_match_score,p.work_authorization,int(p.needs_sponsorship),p.notice_period_days,p.expected_compensation,json.dumps(p.preferred_industries),json.dumps(p.preferred_employment_types),now())
     execute("UPDATE profiles SET full_name=?,email=?,current_employer=?,current_role=?,target_titles=?,skills=?,locations=?,remote_allowed=?,excluded_roles=?,excluded_employment_types=?,country=?,remote_countries=?,years_experience=?,relevant_experience=?,minimum_match_score=?,work_authorization=?,needs_sponsorship=?,notice_period_days=?,expected_compensation=?,preferred_industries=?,preferred_employment_types=?,updated_at=? WHERE id=?",values+(user_id(),))
     profile=get_profile_data();enqueue(user_id(),"profile",user_id(),"upsert",profile);recalculate(profile);return profile
+
+class ProfileCreate(BaseModel):
+    id:str="";label:str="";full_name:str="";email:str=""
+class ProfileSwitch(BaseModel):profile_id:str
+
+@app.get("/api/profiles")
+def list_profiles():
+    """Local multi-user: every profile row is a separate user workspace."""
+    if hosted():raise HTTPException(403,"Profile switching follows your hosted sign-in")
+    return rows("SELECT id,full_name,email,current_role,created_at,updated_at FROM profiles ORDER BY created_at")
+@app.post("/api/profiles",status_code=201)
+def create_profile(item:ProfileCreate):
+    if hosted():raise HTTPException(403,"Profile switching is available in local mode")
+    pid=(item.id or "").strip() or ("user-"+uid()[:8])
+    if not re.fullmatch(r"[A-Za-z0-9._-]{1,64}",pid):raise HTTPException(422,"Profile id may only contain letters, numbers, dots, dashes and underscores")
+    if rows("SELECT id FROM profiles WHERE id=?",(pid,)):raise HTTPException(409,"A profile with this id already exists")
+    ensure_profile(pid,item.email or "")
+    display=(item.full_name or item.label).strip()
+    if display:execute("UPDATE profiles SET full_name=?,updated_at=? WHERE id=?",(display,now(),pid))
+    return decode_profile(rows("SELECT * FROM profiles WHERE id=?",(pid,))[0])
+@app.post("/api/session/profile")
+def switch_profile(item:ProfileSwitch):
+    """Activate another local profile via a long-lived cookie."""
+    if hosted():raise HTTPException(403,"Profile switching follows your hosted sign-in")
+    if not rows("SELECT id FROM profiles WHERE id=?",(item.profile_id,)):raise HTTPException(404,"Profile not found")
+    response=JSONResponse({"ok":True,"profile_id":item.profile_id})
+    response.set_cookie(PROFILE_COOKIE,item.profile_id,samesite="lax",max_age=60*60*24*365,path="/")
+    return response
+@app.delete("/api/profiles/{pid}")
+def delete_profile(pid:str,response:Response):
+    """Remove a local profile workspace and every row it owns."""
+    if hosted():raise HTTPException(403,"Hosted accounts use /api/account instead")
+    if pid=="default":raise HTTPException(400,"The default profile cannot be deleted")
+    if not rows("SELECT id FROM profiles WHERE id=?",(pid,)):raise HTTPException(404,"Profile not found")
+    resume_paths=[Path(x["storage_path"]) for x in rows("SELECT storage_path FROM resumes WHERE profile_id=?",(pid,))]
+    with connection() as db:
+        app_ids=[x[0] for x in db.execute("SELECT id FROM applications WHERE profile_id=?",(pid,))]
+        for aid in app_ids:db.execute("DELETE FROM application_events WHERE application_id=?",(aid,))
+        for table,column in (("applications","profile_id"),("job_matches","profile_id"),("career_evidence","profile_id"),("resumes","profile_id"),("job_sources","owner_id"),("notifications","owner_id"),("scan_runs","owner_id"),("generated_artifacts","owner_id"),("ai_providers","owner_id"),("ai_routes","owner_id"),("ai_request_log","owner_id"),("interview_prep","owner_id"),("sync_outbox","owner_id"),("hidden_jobs","owner_id")):db.execute(f"DELETE FROM {table} WHERE {column}=?",(pid,))
+        db.execute("DELETE FROM profiles WHERE id=?",(pid,))
+    for path in resume_paths:
+        if path.is_file() and path.parent.resolve()==settings.upload_path.resolve():path.unlink()
+    response.delete_cookie(PROFILE_COOKIE,path="/")
+    return {"ok":True}
 
 def add_evidence(rid:str,category:str,value:str,confidence=.72,section=""):
     value=value.strip()

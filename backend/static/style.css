@@ -27,3 +27,8 @@ button.is-busy{position:relative;filter:saturate(.7)}button.is-busy:before{conte
 details summary{cursor:pointer;color:var(--blue);font-weight:700;margin:10px 0}
 @media(max-width:760px){.score-ring{width:60px;height:60px}.header-actions .danger,.header-actions .secondary{display:none}.source-health{grid-template-columns:1fr}.route-chip{margin-bottom:6px}}
 @media(prefers-reduced-motion:reduce){.score-ring,.scan-progress i,#toast.toast-in,#content.view-enter{animation:none!important}}
+/* Profile switcher chip (multi-user) */
+.profile-chip{display:inline-flex;align-items:center;gap:8px;padding:5px 12px 5px 6px;border-radius:999px;font-weight:600;font-size:13px}
+.profile-chip .chip-avatar{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#6a89a7,#88bdf2);color:#fff;font-size:11px;font-weight:700;flex:none}
+.profile-chip .chip-caret{font-style:normal;font-size:10px;opacity:.7;margin-left:2px}
+.profile-row{align-items:center}.profile-row.active{outline:2px solid #88bdf2;outline-offset:-2px;border-radius:10px}
