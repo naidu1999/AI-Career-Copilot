@@ -11,18 +11,13 @@ SEED_SOURCES = [
     ("Databricks", "greenhouse", "databricks", False),
     ("Coinbase", "greenhouse", "coinbase", False),
     ("Cloudflare", "greenhouse", "cloudflare", False),
-    ("DoorDash", "greenhouse", "doordash", False),
     ("Pinterest", "greenhouse", "pinterest", False),
     ("Discord", "greenhouse", "discord", False),
-    ("Notion", "greenhouse", "notion", False),
     ("Instacart", "greenhouse", "instacart", False),
     ("Reddit", "greenhouse", "reddit", False),
     ("GitLab", "greenhouse", "gitlab", False),
-    ("HashiCorp", "greenhouse", "hashicorp", False),
     ("Asana", "greenhouse", "asana", False),
     ("Robinhood", "greenhouse", "robinhood", False),
-    ("Netflix", "lever", "netflix", False),
     ("Palantir", "lever", "palantir", False),
-    ("Ramp", "lever", "ramp", False),
 ]
 

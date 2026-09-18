@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 import queue
 import re
 import threading
@@ -56,6 +57,12 @@ _recalc_worker_started=False
 
 def request_recalc(pid:str) -> None:
     """Schedule a full match recompute for a profile without blocking."""
+    # Under pytest, run inline: the shared background worker and its coalescing
+    # would otherwise leak work across tests (each test uses its own database).
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        row=rows("SELECT * FROM profiles WHERE id=?",(pid,))
+        if row:recalculate(_decode_profile_row(row[0] if isinstance(row,list) else row))
+        return
     global _recalc_worker_started
     with _recalc_lock:
         if pid in _recalc_queued:return
@@ -137,6 +144,9 @@ async def scan(profile: dict, trigger: str="manual", source_id:str|None=None) ->
         rank=(ats_first, row["posted_at"] or "")
         if current is None or rank>current[0]:best[row["canonical_key"]]=(rank,row)
     touched=set()  # job ids whose match rows must be recomputed this scan
+    # Insurance against stale refs (e.g. jobs removed outside this code path):
+    # a ref without its job would crash the UNIQUE(provider,source_key) upserts.
+    execute("DELETE FROM job_source_refs WHERE job_id NOT IN (SELECT id FROM jobs)")
     for source,jobs,fetch_error in fetched:
         source_count=0
         source_duplicates=0
@@ -159,10 +169,10 @@ async def scan(profile: dict, trigger: str="manual", source_id:str|None=None) ->
                         if duplicate:
                             jid=duplicate[1]["id"];source_duplicates+=1;duplicate_total+=1
                             db.execute("UPDATE jobs SET duplicate_count=duplicate_count+1,last_seen_at=? WHERE id=?",(stamp,jid))
-                            db.execute("INSERT OR REPLACE INTO job_source_refs (id,job_id,provider,source_key,source_name,url,first_seen_at,last_seen_at) VALUES (COALESCE((SELECT id FROM job_source_refs WHERE provider=? AND source_key=?),?),?,?,?,?,?,?,?)",(d["provider"],d["source_key"],uid(),jid,d["provider"],d["source_key"],d["source_name"],d["url"],stamp,stamp))
+                            db.execute("INSERT INTO job_source_refs (id,job_id,provider,source_key,source_name,url,first_seen_at,last_seen_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(provider,source_key) DO UPDATE SET job_id=excluded.job_id,url=excluded.url,source_name=excluded.source_name,last_seen_at=excluded.last_seen_at",(uid(),jid,d["provider"],d["source_key"],d["source_name"],d["url"],stamp,stamp))
                         else:
                             jid=uid();db.execute("INSERT INTO jobs (id,source_key,provider,source_name,title,company,location,description,url,posted_at,first_seen_at,date_semantics,employment_type,is_active,raw_json,fingerprint,last_seen_at,liveness_status,canonical_key) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(jid,d["source_key"],d["provider"],d["source_name"],d["title"],d["company"],d["location"],d["description"],d["url"],d["posted_at"],stamp,d["date_semantics"],d["employment_type"],1,json.dumps(d["raw_json"] or {}),fp,stamp,"live",canonical));added+=1
-                            db.execute("INSERT INTO job_source_refs VALUES (?,?,?,?,?,?,?,?)",(uid(),jid,d["provider"],d["source_key"],d["source_name"],d["url"],stamp,stamp))
+                            db.execute("INSERT INTO job_source_refs (id,job_id,provider,source_key,source_name,url,first_seen_at,last_seen_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(provider,source_key) DO UPDATE SET job_id=excluded.job_id,url=excluded.url,source_name=excluded.source_name,last_seen_at=excluded.last_seen_at",(uid(),jid,d["provider"],d["source_key"],d["source_name"],d["url"],stamp,stamp))
                             by_key[d["source_key"]]={"id":jid,"source_key":d["source_key"],"fingerprint":fp}
                             # Register the new vacancy so later sources in THIS scan still merge onto it.
                             rank=(0 if d["provider"] in ATS_PROVIDERS else 1, d["posted_at"] or "")
@@ -174,10 +184,16 @@ async def scan(profile: dict, trigger: str="manual", source_id:str|None=None) ->
         except Exception as exc:
             # Never persist credentials: provider errors can echo authenticated URLs.
             message=re.sub(r"(app_key|apiKey|api_key|token|app_id)=[^&\s'\"]+",r"\1=***",str(exc))[:300]
+            # A gone board (404) or a source whose credentials were never set up
+            # will never succeed again — disable it so scans stay clean. Transient
+            # failures (rate limits, expired keys) keep the source enabled.
+            permanent=("404" in message) or ("not configured" in message.lower())
+            if permanent:message+=" · source disabled automatically"
             errors.append({"source":source["name"],"error":message})
             duration=(datetime.now(timezone.utc)-source_started).total_seconds()*1000
             failures=int(source.get("consecutive_failures") or 0)+1;cooldown=(datetime.now(timezone.utc)+timedelta(minutes=min(60,2**min(failures,5)))).isoformat()
             execute("UPDATE job_sources SET last_scan_at=?,last_error=?,last_duration_ms=?,last_status='failed',consecutive_failures=consecutive_failures+1,cooldown_until=? WHERE id=?",(now(),message,duration,cooldown,source["id"]))
+            if permanent:execute("UPDATE job_sources SET enabled=0 WHERE id=?",(source["id"],))
     recalculate(profile, touched=touched)
     source_total=len(sources)
     execute("UPDATE scan_runs SET finished_at=?,new_jobs=?,updated_jobs=?,errors=?,status=?,sources_scanned=?,jobs_found=? WHERE id=?",(now(),added,updated,json.dumps(errors),"partial" if errors else "completed",source_total,added+updated,run_id))

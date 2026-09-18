@@ -1,5 +1,6 @@
 import json
 import hashlib
+import re
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -260,6 +261,21 @@ def initialize() -> None:
                 if name not in columns:
                     db.execute(f"ALTER TABLE {table} ADD COLUMN {name} {declaration}")
         db.executescript(INDEXES)
+        # Very old databases carried a table-wide UNIQUE(provider, board_key) on
+        # job_sources, which blocks a second profile from using the same boards.
+        # Rebuild the table with the per-owner constraint when the old one is
+        # detected. SQLite cannot drop constraints, so the rows are copied.
+        refs_sql = db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='job_sources'").fetchone()
+        if refs_sql and re.search(r"UNIQUE\s*\(\s*provider\s*,\s*board_key\s*\)", refs_sql[0] or "", re.I):
+            legacy_cols = [r[1] for r in db.execute("PRAGMA table_info(job_sources)").fetchall()]
+            select_cols = ", ".join(legacy_cols)
+            insert_cols = select_cols
+            if "last_duration_ms" not in legacy_cols: legacy_cols.append("last_duration_ms")
+            db.execute("ALTER TABLE job_sources RENAME TO job_sources_legacy")
+            db.executescript(SCHEMA)
+            db.execute(f"INSERT INTO job_sources ({insert_cols}, last_duration_ms) SELECT {select_cols}, 0 FROM job_sources_legacy")
+            db.execute("DROP TABLE job_sources_legacy")
+            db.execute("DELETE FROM job_source_refs WHERE job_id NOT IN (SELECT id FROM jobs)")
         count = db.execute("SELECT COUNT(*) FROM profiles").fetchone()[0]
         if not count:
             ts = now()

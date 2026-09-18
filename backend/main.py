@@ -50,6 +50,14 @@ def get_profile_data():
 
 def ensure_profile(pid:str,email:str=""):
     ts=now();execute("INSERT OR IGNORE INTO profiles (id,full_name,email,target_titles,skills,locations,remote_allowed,excluded_roles,excluded_employment_types,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",(pid,"",email,json.dumps(["AI/ML Engineer","Data Scientist","Data Analyst","Data Engineer","NLP/GenAI Engineer","Computer Vision Engineer"]),"[]",json.dumps(["Bengaluru","Hyderabad","Chennai","Remote"]),1,json.dumps(["BPO","Sales","Support","Internship"]),json.dumps(["contract","internship"]),ts,ts))
+    # New local workspaces start with the recommended source catalogue so
+    # their first scan finds jobs instead of failing on zero sources.
+    # Hosted accounts keep the empty-by-default onboarding. API-backed
+    # boards enable only when their credentials exist.
+    if not hosted() and not rows("SELECT id FROM job_sources WHERE owner_id=? LIMIT 1",(pid,)):
+        for name,provider,board,default_enabled in SEED_SOURCES:
+            enabled=default_enabled and (provider=="arbeitnow" or provider=="adzuna" and bool(settings.ADZUNA_APP_ID) or provider=="jooble" and bool(settings.JOOBLE_API_KEY))
+            execute("INSERT INTO job_sources (id,name,provider,board_key,enabled,created_at,owner_id) VALUES (?,?,?,?,?,?,?)",(uid(),name,provider,board,int(enabled),ts,pid))
 
 async def lifecycle_check():
     if not hosted() or not settings.INACTIVITY_DELETION_ENABLED:return
