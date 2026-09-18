@@ -91,7 +91,7 @@ def test_dossier_storybank_and_intel(tmp_path, monkeypatch):
         assert client.put(f"/api/stories/{sid}",json={"title":"Led migration","status":"ready"}).status_code==200
         # Dossier falls back to the deterministic engine when AI is unconfigured.
         client.post("/api/jobs/manual",json={"title":"Data Scientist","company":"Acme","location":"Bengaluru","url":"https://acme.jobs/1","description":"Python, SQL"})
-        jobs=client.get("/api/jobs",params={"classification":"all","strict_date":"false","minimum_score":0,"hours":720}).json();assert jobs,"manual job should be listed"
+        jobs=client.get("/api/jobs",params={"classification":"all","strict_date":"false","minimum_score":0,"hours":720}).json()["items"];assert jobs,"manual job should be listed"
         dossier=client.post(f"/api/dossier/{jobs[0]['id']}")
         assert dossier.status_code==201 and dossier.json()["dossier"]["source"]=="basic"
         assert client.get(f"/api/dossier/{jobs[0]['id']}").json()["dossier"]["verdict"] in {"prioritize","strong","possible","skip"}
@@ -113,11 +113,11 @@ def test_v04_manual_job_match_and_application(tmp_path, monkeypatch):
         deadline=monotonic()+10
         matches=[]
         while monotonic()<deadline:
-            matches=client.get("/api/jobs",params={"classification":"all","strict_date":"false","minimum_score":0,"hours":720}).json()
+            matches=client.get("/api/jobs",params={"classification":"all","strict_date":"false","minimum_score":0,"hours":720}).json()["items"]
             if matches:break
             sleep(0.2)
         assert matches,"background re-match should produce the manual job's match"
-        matches=client.get("/api/jobs?classification=all&strict_date=false&hours=720").json()
+        matches=client.get("/api/jobs?classification=all&strict_date=false&hours=720").json()["items"]
         assert len(matches)==1 and matches[0]["matcher_version"]=="4.0"
         assert set(matches[0]["components"]) >= {"title","skills","location","experience"}
         assert client.post("/api/applications",json={"job_id":matches[0]["id"],"status":"shortlisted"}).status_code==201

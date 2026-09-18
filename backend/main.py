@@ -23,6 +23,7 @@ from backend.jobs.catalog import SEED_SOURCES
 from backend.jobs.providers import GLOBAL_PROVIDERS, PROVIDERS, canonical_key, fetch_jobs, key
 from backend.services.ai_router import AIRouter, router_status
 from backend.services.continuity import enqueue, status as sync_status, sync_pending
+from backend.services import linkedin_import
 from backend.services.discovery import recalculate, request_recalc, scan
 from backend.services.dossier import basic_dossier, dossier_prompt, legitimacy_check, parse_dossier_json
 from backend.services.document_service import SUPPORTED, extract_text, file_hash, safe_filename, valid_signature
@@ -275,6 +276,29 @@ class ProfileCreate(BaseModel):
     id:str="";label:str="";full_name:str="";email:str=""
 class ProfileSwitch(BaseModel):profile_id:str
 
+class LinkedInImport(BaseModel):
+    url:str
+
+@app.get("/api/linkedin/status")
+def linkedin_status():
+    """Whether the opt-in LinkedIn import has its provider key configured."""
+    return {"configured":linkedin_import.configured()}
+
+@app.post("/api/linkedin/import")
+def linkedin_import_profile(item:LinkedInImport):
+ """Fetch a LinkedIn profile (your own) via ScrapingDog as pre-fill suggestions.
+
+ Requires SCRAPINGDOG_API_KEY in .env. Nothing is written to the profile:
+ the response is a set of suggestions the user reviews before saving.
+ """
+ try:
+  data=linkedin_import.fetch_profile(item.url)
+ except RuntimeError as exc:
+  raise HTTPException(502,str(exc))
+ except ValueError as exc:
+  raise HTTPException(422,str(exc))
+ return {"fields":linkedin_import.to_profile_fields(data)}
+
 @app.get("/api/profiles")
 def list_profiles():
     """Local multi-user: every profile row is a separate user workspace."""
@@ -463,22 +487,22 @@ def manual_job(item:ManualJob):
     execute("INSERT INTO jobs (id,source_key,provider,source_name,title,company,location,description,url,posted_at,first_seen_at,date_semantics,employment_type,is_active,raw_json,last_seen_at,liveness_status,canonical_key) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(uid(),sid,"manual","Manual import",item.title,item.company,item.location,item.description,url,item.posted_at,now(),"user_supplied",item.employment_type,1,"{}",now(),"unknown",canonical))
     request_recalc(user_id());return {"ok":True}
 @app.get("/api/jobs")
-def list_jobs(hours:int=48,provider:str="",classification:str="qualified",company:str="",q:str="",strict_date:bool=True,minimum_score:float=0,limit:int=200,offset:int=0):
+def list_jobs(hours:int=48,provider:str="",classification:str="qualified",company:str="",q:str="",strict_date:bool=True,minimum_score:float=0,limit:int=60,offset:int=0):
     profile=get_profile_data();threshold=max(minimum_score,0);cutoff=(datetime.now(timezone.utc)-timedelta(hours=max(1,hours))).isoformat() if hours>=0 else ""
-    sql="SELECT j.*,m.score,m.matched_skills,m.missing_skills,m.reasons,m.classification,m.components,m.blockers,m.matcher_version FROM jobs j JOIN job_matches m ON m.job_id=j.id AND m.profile_id=? WHERE j.is_active=1 AND m.score>=? AND NOT EXISTS (SELECT 1 FROM hidden_jobs h WHERE h.owner_id=? AND h.job_id=j.id)";params=[user_id(),threshold,user_id()]
+    where="FROM jobs j JOIN job_matches m ON m.job_id=j.id AND m.profile_id=? WHERE j.is_active=1 AND m.score>=? AND NOT EXISTS (SELECT 1 FROM hidden_jobs h WHERE h.owner_id=? AND h.job_id=j.id)";params=[user_id(),threshold,user_id()]
     if hours>=0:
-        if strict_date:sql+=" AND j.posted_at IS NOT NULL AND j.posted_at>=?";params.append(cutoff)
-        else:sql+=" AND COALESCE(j.posted_at,j.first_seen_at)>=?";params.append(cutoff)
-    if provider:sql+=" AND j.provider=?";params.append(provider)
-    if classification and classification!="all":sql+=" AND m.classification=?";params.append(classification)
-    if company:sql+=" AND j.company LIKE ?";params.append(f"%{company}%")
-    if q:sql+=" AND (j.title LIKE ? OR j.description LIKE ?)";params.extend([f"%{q}%",f"%{q}%"])
-    sql+=" ORDER BY m.score DESC,j.posted_at DESC LIMIT ? OFFSET ?";params.extend([max(1,min(limit,500)),max(0,offset)])
-    data=rows(sql,tuple(params))
+        if strict_date:where+=" AND j.posted_at IS NOT NULL AND j.posted_at>=?";params.append(cutoff)
+        else:where+=" AND COALESCE(j.posted_at,j.first_seen_at)>=?";params.append(cutoff)
+    if provider:where+=" AND j.provider=?";params.append(provider)
+    if classification and classification!="all":where+=" AND m.classification=?";params.append(classification)
+    if company:where+=" AND j.company LIKE ?";params.append(f"%{company}%")
+    if q:where+=" AND (j.title LIKE ? OR j.description LIKE ?)";params.extend([f"%{q}%",f"%{q}%"])
+    total=rows(f"SELECT count(*) AS n {where}",tuple(params))[0]["n"]
+    data=rows(f"SELECT j.*,m.score,m.matched_skills,m.missing_skills,m.reasons,m.classification,m.components,m.blockers,m.matcher_version {where} ORDER BY m.score DESC,j.posted_at DESC LIMIT ? OFFSET ?",tuple(params+[max(1,min(limit,500)),max(0,offset)]))
     for x in data:
         for f in ("matched_skills","missing_skills","reasons","blockers"):x[f]=json.loads(x.get(f) or "[]")
         x["components"]=json.loads(x.get("components") or "{}")
-    return data
+    return {"total":total,"limit":limit,"offset":offset,"items":data}
 @app.delete("/api/jobs/{job_id}")
 def hide_job(job_id:str):
     if not rows("SELECT id FROM jobs WHERE id=?",(job_id,)):raise HTTPException(404,"Job not found")

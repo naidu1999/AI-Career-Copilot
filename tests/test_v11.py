@@ -67,7 +67,7 @@ def test_end_to_end_upload_evidence_match_save_status(tmp_path,monkeypatch):
         matches=[]
         deadline=monotonic()+10
         while monotonic()<deadline:
-            matches=client.get("/api/jobs?classification=all&strict_date=false&hours=720").json()
+            matches=client.get("/api/jobs?classification=all&strict_date=false&hours=720").json()["items"]
             if matches:break
             sleep(0.2)
         assert matches,"background re-match should produce the manual job's match"

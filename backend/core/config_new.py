@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     JOOBLE_API_KEY: str = ""
     USAJOBS_API_KEY: str = ""
     USAJOBS_EMAIL: str = ""
+    SCRAPINGDOG_API_KEY: str = ""
     BACKUP_DIR: str = "data/backups"
     BACKUP_DAILY_RETENTION: int = 7
     BACKUP_WEEKLY_RETENTION: int = 4
