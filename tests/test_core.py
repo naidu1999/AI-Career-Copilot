@@ -118,7 +118,7 @@ def test_v04_manual_job_match_and_application(tmp_path, monkeypatch):
             sleep(0.2)
         assert matches,"background re-match should produce the manual job's match"
         matches=client.get("/api/jobs?classification=all&strict_date=false&hours=720").json()["items"]
-        assert len(matches)==1 and matches[0]["matcher_version"]=="4.0"
+        assert len(matches)==1 and matches[0]["matcher_version"]=="4.1"
         assert set(matches[0]["components"]) >= {"title","skills","location","experience"}
         assert client.post("/api/applications",json={"job_id":matches[0]["id"],"status":"shortlisted"}).status_code==201
         assert client.get("/api/applications").json()[0]["status"]=="shortlisted"

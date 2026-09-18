@@ -1,7 +1,7 @@
 """Karna OS deterministic, auditable Matching Engine v4."""
 import re
 
-VERSION="4.0"
+VERSION="4.1"
 SENIORITY={"intern":0,"trainee":0,"junior":1,"associate":1,"entry":1,"mid":2,"senior":3,"lead":4,"staff":4,"principal":5,"head":6,"director":6,"manager":4}
 REMOTE_GLOBAL=("worldwide","anywhere","global","work from anywhere")
 STOP={"and","the","with","for","from","you","our","engineer","developer","specialist","analyst"}
@@ -84,19 +84,25 @@ def match_job(profile:dict,job:dict)->dict:
  if any(x in employment for x in excluded_types):blockers.append("Employment type is excluded")
 
  locations=[x.lower() for x in profile.get("locations",[]) if x and x.lower()!="remote"];job_location=(job.get("location") or "").lower();snippet=description[:1500].lower()
- remote=any(x in f"{job_location} {snippet}" for x in ("remote","work from home","distributed"));direct=not job_location or any(x in job_location for x in locations)
+ direct=not job_location or any(x in job_location for x in locations)
+ remote_flag=any(x in job_location for x in ("remote","work from home","distributed")) or (not job_location and any(x in snippet for x in ("remote","work from home")))
  remote_countries=[x.lower() for x in profile.get("remote_countries",[]) if x]
- remote_eligible=remote and profile.get("remote_allowed") and (any(x in job_location or x in snippet for x in remote_countries) or any(x in job_location or x in snippet for x in REMOTE_GLOBAL))
- if remote and not remote_eligible:blockers.append("Remote eligibility from an approved country is not confirmed")
- elif job_location and not direct and not remote_eligible:blockers.append(f"Location outside preferences: {job.get('location','Unknown')}")
+ country_hit=any(x in f"{job_location} {snippet}" for x in remote_countries)
+ global_remote=any(x in f"{job_location} {snippet}" for x in REMOTE_GLOBAL)
+ restricted_elsewhere=(any(h in f"{job_location} {snippet}" for h in ("us only","usa only","united states only","uk only","united kingdom only","canada only","europe only","eu only","germany only","australia only","us citizens","u.s. citizens","must be located in the us","based in the us","based in the uk","rights to work in the us","rights to work in the uk")) and not country_hit)
+ remote_eligible=bool(profile.get("remote_allowed")) and not restricted_elsewhere
+ if job_location and not direct and not (remote_flag and remote_eligible):blockers.append(f"Location outside preferences: {job.get('location','Unknown')}")
  if re.search(r"\b(us citizens? only|must be a us citizen|security clearance|required clearance)\b",description,re.I):blockers.append("Work-authorization or clearance restriction detected")
  if profile.get("needs_sponsorship") and re.search(r"\b(no|not)\s+(visa\s+)?sponsorship\b",description,re.I):blockers.append("Employer explicitly states sponsorship is unavailable")
 
- years=float(profile.get("relevant_experience") or profile.get("years_experience") or 0);minimum_years,maximum_years=required_years(description)
- if minimum_years is not None and years+.25<minimum_years:
+ years=float(profile.get("relevant_experience") or profile.get("years_experience") or 0);years_known=years>0
+ minimum_years,maximum_years=required_years(description)
+ if years_known and minimum_years is not None and years+.25<minimum_years:
   gap=f"Requires about {minimum_years:g} years; verified profile states {years:g}";blockers.append(gap);warnings.append(gap)
- title_level=seniority_level(title);person_level=candidate_level(years)
- if title_level>=person_level+2:blockers.append("Seniority is substantially above verified relevant experience")
+ elif minimum_years is not None and not years_known:
+  warnings.append(f"Add your years of experience in Career Profile to check the {minimum_years:g}-year requirement")
+ title_level=seniority_level(title);person_level=candidate_level(years if years_known else 3)
+ if years_known and title_level>=person_level+2:blockers.append("Seniority is substantially above verified relevant experience")
  elif title_level==person_level+1:warnings.append("Role is one seniority step above the current experience band")
 
  skills=[s for s in profile.get("skills",[]) if s];required_text,preferred_text=qualification_sections(description);req_tokens=tokens(required_text);pref_tokens=tokens(preferred_text)
@@ -107,7 +113,7 @@ def match_job(profile:dict,job:dict)->dict:
  elif missing_mandatory:warnings.append("Missing mandatory signals: "+", ".join(missing_mandatory[:6]))
 
  skill_score=len(matched)/max(1,len(skills)) if skills else .2;location_score=1 if direct or remote_eligible else 0
- experience_score=1 if minimum_years is None else min(1,years/max(1,minimum_years));seniority_score=1 if title_level<=person_level else .55 if title_level==person_level+1 else 0
+ experience_score=1 if minimum_years is None else (min(1,years/max(1,minimum_years)) if years_known else .6);seniority_score=1 if title_level<=person_level else .55 if title_level==person_level+1 else 0
  evidence_score=min(1,float(profile.get("verified_evidence_ratio") or 0));mandatory_score=1 if not explicit_requirements else (len(explicit_requirements)-len(missing_mandatory))/len(explicit_requirements)
  components={"title":round(title_ratio*100,1),"skills":round(skill_score*100,1),"mandatory":round(mandatory_score*100,1),"location":round(location_score*100,1),"experience":round(experience_score*100,1),"seniority":round(seniority_score*100,1),"evidence":round(evidence_score*100,1)}
  score=round(.30*components["title"]+.20*components["skills"]+.15*components["mandatory"]+.12*components["location"]+.10*components["experience"]+.08*components["seniority"]+.05*components["evidence"],1)
