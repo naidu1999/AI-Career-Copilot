@@ -9,6 +9,28 @@ def test_parser_preserves_unknown_and_skills():
     assert "Jane Doe" in result["unknown_content"]
     assert result["personal_details"]["email"]=="jane@example.com"
 
+def test_bulk_applications_idempotent(tmp_path, monkeypatch):
+    from backend.core.config_new import settings
+    monkeypatch.setattr(settings,"DATABASE_PATH",str(tmp_path/"test.db"))
+    monkeypatch.setattr(settings,"UPLOAD_DIR",str(tmp_path/"uploads"))
+    from backend.db.local import execute,now,uid
+    with TestClient(app) as client:
+        ids=[]
+        for t in ("Data Scientist","ML Engineer"):
+            jid=uid();ids.append(jid)
+            execute("INSERT INTO jobs (id,source_key,provider,source_name,title,company,location,description,url,posted_at,first_seen_at,date_semantics,employment_type,is_active,raw_json,last_seen_at,liveness_status,canonical_key) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(jid,jid[:8],"manual","Test",t,"Acme","Bengaluru","Python","https://example.com/job","2026-09-17",now(),"standardized","full-time",1,"{}",now(),"unknown",""))
+        r=client.post("/api/applications/bulk",json=[{"job_id":ids[0],"status":"applied"},{"job_id":ids[1],"status":"saved"}])
+        assert r.status_code==201 and r.json()["added"]==2
+        # Re-posting the same jobs must not duplicate rows or downgrade statuses.
+        r2=client.post("/api/applications/bulk",json=[{"job_id":ids[0],"status":"saved"},{"job_id":ids[1],"status":"saved"}])
+        assert r2.status_code==201 and r2.json()["added"]==0
+        apps=client.get("/api/applications").json()
+        assert len(apps)==2
+        assert {a["status"] for a in apps}=={"applied","saved"}
+        # Unknown jobs are refused rather than silently skipped.
+        assert client.post("/api/applications/bulk",json=[{"job_id":"missing-job"}]).status_code==400
+
+
 def test_matching_and_exclusion():
     p={"target_titles":["Data Scientist"],"skills":["Python","SQL"],"locations":["Bengaluru"],"remote_allowed":True,"remote_countries":["India"],"years_experience":3,"excluded_roles":["Sales"],"excluded_employment_types":["contract"]}
     good=match_job(p,{"title":"Data Scientist","description":"Python and SQL","location":"Bengaluru","employment_type":"full-time"})

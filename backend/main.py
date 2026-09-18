@@ -510,12 +510,31 @@ def hide_job(job_id:str):
 
 ALLOWED_STATUSES={"discovered","evaluated","ineligible","rejected","shortlisted","saved","preparing","ready_to_apply","applied","recruiter_contacted","assessment","interview","on_hold","withdrawn","offer","accepted"}
 @app.post("/api/applications",status_code=201)
-def save_application(item:ApplicationCreate):
+async def save_application(item:ApplicationCreate):
     if item.status not in ALLOWED_STATUSES:raise HTTPException(400,"Invalid status")
-    ts=now();old=rows("SELECT id FROM applications WHERE profile_id=? AND job_id=?",(user_id(),item.job_id))
+    pid=user_id();ts=now();old=rows("SELECT id FROM applications WHERE profile_id=? AND job_id=?",(pid,item.job_id))
     if old:execute("UPDATE applications SET status=?,notes=?,updated_at=? WHERE id=?",(item.status,item.notes,ts,old[0]["id"]));aid=old[0]["id"]
-    else:aid=uid();execute("INSERT INTO applications (id,profile_id,job_id,status,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?)",(aid,user_id(),item.job_id,item.status,item.notes,ts,ts));execute("INSERT INTO application_events VALUES (?,?,?,?,?,?)",(uid(),aid,None,item.status,item.notes,ts))
-    result={"id":aid,**item.model_dump()};enqueue(user_id(),"application",aid,"upsert",result);return result
+    else:aid=uid();execute("INSERT INTO applications (id,profile_id,job_id,status,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?)",(aid,pid,item.job_id,item.status,item.notes,ts,ts));execute("INSERT INTO application_events VALUES (?,?,?,?,?,?)",(uid(),aid,None,item.status,item.notes,ts))
+    result={"id":aid,"created":not bool(old),**item.model_dump()};enqueue(pid,"application",aid,"upsert",result);return result
+
+@app.post("/api/applications/bulk",status_code=201)
+async def bulk_save_applications(items:list[ApplicationCreate]):
+    """Quick apply: track many jobs at once. Idempotent per job — existing rows keep their status."""
+    pid=user_id();ensure_profile(pid);ts=now();out=[]
+    known={r["id"] for r in rows("SELECT id FROM jobs WHERE id IN (%s)"%",".join("?"*len(items)),tuple(i.job_id for i in items))} if items else set()
+    for item in items:
+        if item.status not in ALLOWED_STATUSES:raise HTTPException(400,"Invalid status")
+        if item.job_id not in known:raise HTTPException(400,f"Job {item.job_id} not found")
+        old=rows("SELECT id,status FROM applications WHERE profile_id=? AND job_id=?",(pid,item.job_id))
+        if old:
+            aid=old[0]["id"]
+            if item.status!="saved" and item.status!=old[0]["status"]:
+                execute("UPDATE applications SET status=?,updated_at=? WHERE id=?",(item.status,ts,aid));execute("INSERT INTO application_events VALUES (?,?,?,?,?,?)",(uid(),aid,old[0]["status"],item.status,"bulk update",ts))
+        else:
+            aid=uid();execute("INSERT INTO applications (id,profile_id,job_id,status,notes,created_at,updated_at) VALUES (?,?,?,?,?,?,?)",(aid,pid,item.job_id,item.status,item.notes,ts,ts));execute("INSERT INTO application_events VALUES (?,?,?,?,?,?)",(uid(),aid,None,item.status,item.notes,ts))
+        out.append({"id":aid,"job_id":item.job_id,"created":not bool(old)})
+    if out:enqueue(pid,"application",",".join(x["id"] for x in out),"bulk_upsert",{"count":len(out)})
+    return {"items":out,"added":sum(1 for x in out if x["created"]),"total":len(out)}
 @app.get("/api/applications")
 def applications(include_archived:bool=False):
     sql="SELECT a.*,j.title,j.company,j.location,j.url,j.provider,m.score,m.matcher_version FROM applications a JOIN jobs j ON j.id=a.job_id LEFT JOIN job_matches m ON m.job_id=j.id AND m.profile_id=? WHERE a.profile_id=?";params=[user_id(),user_id()]
