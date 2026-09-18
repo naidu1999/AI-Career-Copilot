@@ -49,3 +49,13 @@ details summary{cursor:pointer;color:var(--blue);font-weight:700;margin:10px 0}
 .bulk-bar button.primary{background:linear-gradient(135deg,#88bdf2,#5b9bd8);color:#12304a;box-shadow:none}
 .bulk-bar button.secondary{background:#ffffff14;border-color:#ffffff2e;color:#e8f2fc}
 .job .pill.tracked{background:#e4ecf5;color:#51687d}
+/* Onboarding tour, profile meter, answer-sheet checklist */
+.tour-tip{display:none;position:fixed;right:28px;bottom:28px;width:min(360px,90vw);background:linear-gradient(135deg,#2c3e50,#22374b);color:#e8f2fc;border-radius:14px;padding:16px 18px;z-index:60;box-shadow:0 18px 44px #22374b59;font-size:14px;line-height:1.5}
+.tour-hi{outline:3px solid #88bdf2!important;outline-offset:2px;border-radius:8px;animation:pulseHi 1.6s ease-in-out infinite}
+@keyframes pulseHi{0%,100%{outline-color:#88bdf2}50%{outline-color:#5b9bd8}}
+.chk{padding:7px 10px;border-radius:8px;margin:4px 0;font-size:13px}
+.chk.done{background:#edf7f3;color:#315e50}
+.chk.todo{background:#faf0d9;color:#7a5a10}
+.answer-sheet td:first-child{color:var(--muted);width:190px;text-transform:uppercase;font-size:10px;letter-spacing:.8px}
+#pcBar b{font-size:15px}
+

@@ -2,6 +2,7 @@ import json
 import hashlib
 import re
 import sqlite3
+import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -197,6 +198,10 @@ def initialize() -> None:
             "minimum_match_score": "REAL NOT NULL DEFAULT 55",
             "current_employer": "TEXT NOT NULL DEFAULT ''",
             "current_role": "TEXT NOT NULL DEFAULT ''",
+            "phone": "TEXT NOT NULL DEFAULT ''",
+            "portfolio_url": "TEXT NOT NULL DEFAULT ''",
+            "linkedin_url": "TEXT NOT NULL DEFAULT ''",
+            "location_current": "TEXT NOT NULL DEFAULT ''",
             "relevant_experience": "REAL NOT NULL DEFAULT 0",
             "work_authorization": "TEXT NOT NULL DEFAULT 'India'",
             "needs_sponsorship": "INTEGER NOT NULL DEFAULT 0",
@@ -255,7 +260,8 @@ def initialize() -> None:
         scan_migrations = {"status":"TEXT NOT NULL DEFAULT 'running'","sources_scanned":"INTEGER NOT NULL DEFAULT 0","jobs_found":"INTEGER NOT NULL DEFAULT 0","owner_id":"TEXT NOT NULL DEFAULT 'default'"}
         notification_migrations={"owner_id":"TEXT NOT NULL DEFAULT 'default'"}
         artifact_migrations={"owner_id":"TEXT NOT NULL DEFAULT 'default'","status":"TEXT NOT NULL DEFAULT 'draft'","approved_at":"TEXT","parent_id":"TEXT","metadata":"TEXT NOT NULL DEFAULT '{}'"}
-        for table, migrations in (("profiles",profile_migrations),("career_evidence",evidence_migrations),("job_sources",source_migrations),("jobs",job_migrations),("job_matches",match_migrations),("applications",application_migrations),("scan_runs",scan_migrations),("notifications",notification_migrations),("generated_artifacts",artifact_migrations)):
+        story_migrations={"owner_id":"TEXT NOT NULL DEFAULT 'default'","updated_at":"TEXT"}
+        for table, migrations in (("profiles",profile_migrations),("career_evidence",evidence_migrations),("job_sources",source_migrations),("jobs",job_migrations),("job_matches",match_migrations),("applications",application_migrations),("scan_runs",scan_migrations),("notifications",notification_migrations),("generated_artifacts",artifact_migrations),("story_bank",story_migrations)):
             columns = {r[1] for r in db.execute(f"PRAGMA table_info({table})").fetchall()}
             for name, declaration in migrations.items():
                 if name not in columns:
@@ -354,8 +360,17 @@ def rows(sql: str, params: tuple = ()) -> list[dict[str, Any]]:
 
 
 def execute(sql: str, params: tuple = ()) -> None:
-    with connection() as db:
-        db.execute(sql, params)
+    # WAL allows one writer at a time; the background re-matcher can hold the
+    # write lock for a while, so retry briefly instead of failing the request.
+    for attempt in range(10):
+        try:
+            with connection() as db:
+                db.execute(sql, params)
+            return
+        except sqlite3.OperationalError as exc:
+            if "locked" not in str(exc).lower() or attempt == 9:
+                raise
+            time.sleep(0.15 * (attempt + 1))
 
 
 def uid() -> str:

@@ -31,6 +31,31 @@ def test_bulk_applications_idempotent(tmp_path, monkeypatch):
         assert client.post("/api/applications/bulk",json=[{"job_id":"missing-job"}]).status_code==400
 
 
+def test_contact_and_answer_sheet_and_gap(tmp_path, monkeypatch):
+    from backend.core.config_new import settings
+    monkeypatch.setattr(settings,"DATABASE_PATH",str(tmp_path/"test.db"))
+    monkeypatch.setattr(settings,"UPLOAD_DIR",str(tmp_path/"uploads"))
+    from backend.db.local import execute,now,uid
+    with TestClient(app) as client:
+        # Blank contact fields must not erase saved values.
+        r=client.patch("/api/profile/contact",json={"phone":"+91 90000 00000","location_current":"Hyderabad"})
+        assert r.status_code==200
+        r2=client.patch("/api/profile/contact",json={"expected_compensation":"12 LPA"})
+        assert r2.status_code==200
+        prof=client.get("/api/profile").json()
+        assert prof["phone"]=="+91 90000 00000" and prof["location_current"]=="Hyderabad"
+        assert client.put("/api/profile",json={"skills":["Python","SQL","docker"],"target_titles":["Python Developer"]}).status_code==200
+        jid=uid()
+        execute("INSERT INTO jobs (id,source_key,provider,source_name,title,company,location,description,url,posted_at,first_seen_at,date_semantics,employment_type,is_active,raw_json,last_seen_at,liveness_status,canonical_key) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(jid,jid[:8],"manual","Test","Python Developer","Acme","Bengaluru","We need Python and SQL and docker experience","https://example.com/x","2026-09-17",now(),"standardized","full-time",1,"{}",now(),"unknown",""))
+        gap=client.post(f"/api/jobs/{jid}/gap").json()
+        assert "python" in gap["have"] and gap["skills_overlap_pct"]>=0
+        assert isinstance(gap["jd_terms_missing"],list)
+        aid=client.post("/api/applications",json={"job_id":jid,"status":"applied"}).json()["id"]
+        sheet=client.get(f"/api/applications/{aid}/answer-sheet").json()
+        assert sheet["contact"]["phone"]=="+91 90000 00000"
+        assert any(c["label"].startswith("Phone") for c in sheet["checklist"])
+
+
 def test_matching_and_exclusion():
     p={"target_titles":["Data Scientist"],"skills":["Python","SQL"],"locations":["Bengaluru"],"remote_allowed":True,"remote_countries":["India"],"years_experience":3,"excluded_roles":["Sales"],"excluded_employment_types":["contract"]}
     good=match_job(p,{"title":"Data Scientist","description":"Python and SQL","location":"Bengaluru","employment_type":"full-time"})

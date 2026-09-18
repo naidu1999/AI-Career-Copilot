@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_MODEL: str = ""
     GEMINI_API_KEY: str = ""
+    GROQ_API_KEY: str = ""
+    GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
     GEMINI_MODEL: str = ""
     OPENROUTER_API_KEY: str = ""
     OPENROUTER_MODEL: str = ""
@@ -76,3 +79,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+

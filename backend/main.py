@@ -177,6 +177,11 @@ class ProfileUpdate(BaseModel):
     years_experience:float=0;relevant_experience:float=0;minimum_match_score:float=55
     work_authorization:str="India";needs_sponsorship:bool=False;notice_period_days:int=45
     expected_compensation:str="8-12 LPA";preferred_industries:list[str]=Field(default_factory=list)
+    preferred_employment_types:list[str]=Field(default_factory=list);phone:str|None=None;portfolio_url:str|None=None;linkedin_url:str|None=None
+
+class ProfileContact(BaseModel):
+    """Answer-sheet contact block. Optional fields are only overwritten when non-empty."""
+    phone:str="";portfolio_url:str="";linkedin_url:str="";expected_compensation:str="";notice_period_days:int|None=None;location_current:str=""
     preferred_employment_types:list[str]=Field(default_factory=lambda:["full-time"])
 class SourceCreate(BaseModel):name:str;provider:str;board_key:str
 class SourceDetect(BaseModel):name:str;careers_url:str
@@ -265,8 +270,12 @@ async def delete_account(item:DeleteAccount,response:Response):
 def get_profile():return get_profile_data()
 @app.put("/api/profile")
 def update_profile(p:ProfileUpdate):
+    # Contact fields are preserved when a payload omits them, so partial saves
+    # (imports, scripts) can never silently wipe the user's phone/links.
+    cur=rows("SELECT phone,portfolio_url,linkedin_url FROM profiles WHERE id=?",(user_id(),)) or [{"phone":"","portfolio_url":"","linkedin_url":""}]
+    phone=p.phone if p.phone is not None else cur[0]["phone"];portfolio=p.portfolio_url if p.portfolio_url is not None else cur[0]["portfolio_url"];linkedin=p.linkedin_url if p.linkedin_url is not None else cur[0]["linkedin_url"]
     values=(p.full_name,p.email,p.current_employer,p.current_role,json.dumps(p.target_titles),json.dumps(p.skills),json.dumps(p.locations),int(p.remote_allowed),json.dumps(p.excluded_roles),json.dumps(p.excluded_employment_types),p.country,json.dumps(p.remote_countries),p.years_experience,p.relevant_experience,p.minimum_match_score,p.work_authorization,int(p.needs_sponsorship),p.notice_period_days,p.expected_compensation,json.dumps(p.preferred_industries),json.dumps(p.preferred_employment_types),now())
-    execute("UPDATE profiles SET full_name=?,email=?,current_employer=?,current_role=?,target_titles=?,skills=?,locations=?,remote_allowed=?,excluded_roles=?,excluded_employment_types=?,country=?,remote_countries=?,years_experience=?,relevant_experience=?,minimum_match_score=?,work_authorization=?,needs_sponsorship=?,notice_period_days=?,expected_compensation=?,preferred_industries=?,preferred_employment_types=?,updated_at=? WHERE id=?",values+(user_id(),))
+    execute("UPDATE profiles SET full_name=?,email=?,current_employer=?,current_role=?,target_titles=?,skills=?,locations=?,remote_allowed=?,excluded_roles=?,excluded_employment_types=?,country=?,remote_countries=?,years_experience=?,relevant_experience=?,minimum_match_score=?,work_authorization=?,needs_sponsorship=?,notice_period_days=?,expected_compensation=?,preferred_industries=?,preferred_employment_types=?,phone=?,portfolio_url=?,linkedin_url=?,updated_at=? WHERE id=?",values[:-1]+(phone,portfolio,linkedin,now(),user_id(),))
     profile=get_profile_data();enqueue(user_id(),"profile",user_id(),"upsert",profile)
     # Full re-matching (~8k jobs) runs on the background worker; the save
     # returns instantly instead of blocking the browser for ~40 seconds.
@@ -508,6 +517,7 @@ def hide_job(job_id:str):
     if not rows("SELECT id FROM jobs WHERE id=?",(job_id,)):raise HTTPException(404,"Job not found")
     execute("INSERT OR REPLACE INTO hidden_jobs VALUES (?,?,?)",(user_id(),job_id,now()));return {"ok":True}
 
+STOPWORDS={"and","the","for","with","you","your","our","are","will","all","any","can","has","have","this","that","from","into","not","but","who","whom","was","were","been","being","they","their","them","its","it's","also","more","most","than","then","over","under","about","across","after","before","between","during","each","other","some","such","only","own","same","too","very","just","use","using","used","work","working","works","role","team","teams","job","jobs","year","years","experience","strong","good","great","excellent","ability","able","must","should","would","could","may","might","plus","etc","via","per","within","across","apply","applicants","candidates","candidate","company","companies","employee","employees","benefits","salary","full","time","part","remote","hybrid","office","location","based","including","include","includes","well","best","new","help","need","needs","required","require","requires","responsibilities","requirements","qualification","qualifications","skills","skill","knowledge","preferred","plus","join","looking","hiring","want","make","made","get","like","people","day","days","week","weeks","month","months"}
 ALLOWED_STATUSES={"discovered","evaluated","ineligible","rejected","shortlisted","saved","preparing","ready_to_apply","applied","recruiter_contacted","assessment","interview","on_hold","withdrawn","offer","accepted"}
 @app.post("/api/applications",status_code=201)
 async def save_application(item:ApplicationCreate):
@@ -540,6 +550,53 @@ def applications(include_archived:bool=False):
     sql="SELECT a.*,j.title,j.company,j.location,j.url,j.provider,m.score,m.matcher_version FROM applications a JOIN jobs j ON j.id=a.job_id LEFT JOIN job_matches m ON m.job_id=j.id AND m.profile_id=? WHERE a.profile_id=?";params=[user_id(),user_id()]
     if not include_archived:sql+=" AND a.archived=0"
     return rows(sql+" ORDER BY a.updated_at DESC",tuple(params))
+@app.patch("/api/profile/contact")
+def update_profile_contact(c:ProfileContact):
+    """Answer-sheet contact block. Blank fields never erase saved values."""
+    pid=user_id();cur=rows("SELECT phone,portfolio_url,linkedin_url,expected_compensation,notice_period_days,location_current FROM profiles WHERE id=?",(pid,))
+    if not cur:raise HTTPException(404,"Profile not found")
+    cur=cur[0]
+    vals=(c.phone or cur["phone"],c.portfolio_url or cur["portfolio_url"],c.linkedin_url or cur["linkedin_url"],c.expected_compensation or cur["expected_compensation"],c.notice_period_days if c.notice_period_days is not None else cur["notice_period_days"],c.location_current or cur.get("location_current","") or cur["locations"],now())
+    execute("UPDATE profiles SET phone=?,portfolio_url=?,linkedin_url=?,expected_compensation=?,notice_period_days=?,location_current=?,updated_at=? WHERE id=?",vals+(pid,))
+    return {"ok":True}
+
+@app.get("/api/applications/{aid}/answer-sheet")
+def answer_sheet(aid:str):
+    """Everything you need to fill an external application form, on one screen."""
+    pid=user_id();app_row=rows("SELECT a.id,a.status,j.title,j.company,j.location,j.url FROM applications a JOIN jobs j ON j.id=a.job_id WHERE a.id=? AND a.profile_id=?",(aid,pid))
+    if not app_row:raise HTTPException(404,"Application not found")
+    app_row=app_row[0];p=get_profile_data()
+    evidence=rows("SELECT category,original_text,verification_status FROM career_evidence WHERE profile_id=? AND verification_status='verified' ORDER BY category LIMIT 30",(pid,))
+    top_skills=list(p.get("skills") or [])[:12]
+    story=rows("SELECT title,situation,action,result FROM story_bank WHERE owner_id=? AND status='ready' ORDER BY updated_at DESC LIMIT 1",(pid,))
+    checklist=[
+        {"label":"Upload the newest resume","done":bool(rows("SELECT id FROM resumes WHERE profile_id=? LIMIT 1",(pid,)))},
+        {"label":"Phone number confirmed","done":bool(p.get("phone"))},
+        {"label":"Expected compensation decided","done":bool(p.get("expected_compensation"))},
+        {"label":"Notice period confirmed","done":True},
+        {"label":"Portfolio / LinkedIn ready","done":bool(p.get("portfolio_url") or p.get("linkedin_url"))},
+    ]
+    return {"job":app_row,"contact":{"full_name":p.get("full_name",""),"email":p.get("email",""),"phone":p.get("phone",""),"location":p.get("location_current",""),"portfolio_url":p.get("portfolio_url",""),"linkedin_url":p.get("linkedin_url",""),"expected_compensation":p.get("expected_compensation",""),"notice_period_days":p.get("notice_period_days",45),"work_authorization":p.get("work_authorization",""),"years_experience":p.get("years_experience",0)},"skills":top_skills,"evidence_summary":[{"category":e["category"],"text":(e["original_text"] or "")[:220]} for e in evidence[:8]],"star_story":story[0] if story else None,"checklist":checklist}
+
+@app.post("/api/jobs/{job_id}/gap")
+def job_gap(job_id:str):
+    """Resume vs job description: what lines up, what is missing, what to do about it."""
+    pid=user_id();job=rows("SELECT title,description FROM jobs WHERE id=?",(job_id,))
+    if not job:raise HTTPException(404,"Job not found")
+    p=get_profile_data()
+    resume=rows("SELECT structured_json,extracted_text FROM resumes WHERE profile_id=? ORDER BY created_at DESC LIMIT 1",(pid,))
+    resume_text=((resume[0]["structured_json"] if resume else "")+" "+(resume[0]["extracted_text"] if resume else "")).lower()
+    skills=[s.lower().strip() for s in (p.get("skills") or []) if str(s).strip()]
+    desc=(job[0]["description"] or "").lower()
+    have=[s for s in skills if s in desc]
+    words=set(re.findall(r"[a-z][a-z+#.\-]{2,}",desc))-STOPWORDS
+    jd_only=sorted(w for w in words if w not in resume_text and not any(w in s or s in w for s in skills))[:14]
+    overlap=round(100*len(have)/max(1,len(skills)))
+    return {"job_title":job[0]["title"],"have":have,"skills_not_in_jd":[s for s in skills if s not in desc],"jd_terms_missing":jd_only,"skills_overlap_pct":overlap,"advice":[
+        "Add missing JD terms to your resume only where you can back them with real evidence — never invent them.",
+        "Mirror the job title in your resume headline if it is honest for your experience level.",
+        "Lead your summary with the two strongest skill overlaps shown above."]}
+
 @app.patch("/api/applications/{aid}")
 def update_application(aid:str,change:ApplicationUpdate):
     if change.status not in ALLOWED_STATUSES:raise HTTPException(400,"Invalid status")

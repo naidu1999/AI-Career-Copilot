@@ -25,6 +25,8 @@ def configured_providers()->list[Provider]:
         providers.append(Provider("anthropic","Anthropic","anthropic","https://api.anthropic.com",settings.ANTHROPIC_API_KEY,settings.ANTHROPIC_MODEL,False,True,30))
     if settings.OPENAI_API_KEY and settings.OPENAI_MODEL:
         providers.append(Provider("openai","OpenAI API","openai",settings.OPENAI_BASE_URL,settings.OPENAI_API_KEY,settings.OPENAI_MODEL,False,True,40))
+    if settings.GROQ_API_KEY:
+        providers.append(Provider("groq","Groq (free tier)","openai",settings.GROQ_BASE_URL,settings.GROQ_API_KEY,settings.GROQ_MODEL,False,False,35))
     if settings.GEMINI_API_KEY and settings.GEMINI_MODEL:
         providers.append(Provider("gemini","Google Gemini","gemini","https://generativelanguage.googleapis.com",settings.GEMINI_API_KEY,settings.GEMINI_MODEL,False,False,50))
     if settings.OPENROUTER_API_KEY and settings.OPENROUTER_MODEL:
