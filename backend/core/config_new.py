@@ -36,6 +36,16 @@ class Settings(BaseSettings):
     GEMINI_MODEL: str = ""
     OPENROUTER_API_KEY: str = ""
     OPENROUTER_MODEL: str = ""
+    # Free-tier providers (see .env.example and the free-llm directory)
+    POLLINATIONS_ENABLED: bool = True
+    POLLINATIONS_BASE_URL: str = "https://text.pollinations.ai/openai"
+    POLLINATIONS_MODEL: str = "openai"
+    CEREBRAS_API_KEY: str = ""
+    CEREBRAS_BASE_URL: str = "https://api.cerebras.ai/v1"
+    CEREBRAS_MODEL: str = "llama-3.3-70b"
+    MISTRAL_API_KEY: str = ""
+    MISTRAL_BASE_URL: str = "https://api.mistral.ai/v1"
+    MISTRAL_MODEL: str = "mistral-small-latest"
     OLLAMA_BASE_URL: str = "http://localhost:11434/v1"
     OLLAMA_MODEL: str = ""
     ADZUNA_APP_ID: str = ""

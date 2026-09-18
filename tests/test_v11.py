@@ -112,6 +112,24 @@ async def test_ai_router_falls_back_and_records_health(tmp_path,monkeypatch):
     assert result["provider"]=="Two" and result["attempts"]==2
     assert rows("SELECT COUNT(*) n FROM ai_request_log WHERE status='success'")[0]["n"]==1
 
+@pytest.mark.asyncio
+async def test_keyless_pollinations_provider_is_used_without_api_keys(tmp_path,monkeypatch):
+    from backend.core.config_new import settings
+    from backend.db.local import initialize,rows
+    import backend.services.ai_router as module
+    from backend.services.ai_router import AIRouter
+    monkeypatch.setattr(settings,"DATABASE_PATH",str(tmp_path/"keyless.db"))
+    for field in ("AI_API_KEY","OPENAI_API_KEY","ANTHROPIC_API_KEY","GROQ_API_KEY","GEMINI_API_KEY","OPENROUTER_API_KEY","CEREBRAS_API_KEY","MISTRAL_API_KEY","AI_MODEL","OLLAMA_MODEL"):
+        monkeypatch.setattr(settings,field,"")
+    monkeypatch.setattr(settings,"AI_PROVIDER","rules");monkeypatch.setattr(settings,"POLLINATIONS_ENABLED",True)
+    async def fake(provider,messages):
+        assert provider.key=="" and provider.base_url.endswith("pollinations.ai/openai")
+        return "keyless response"
+    monkeypatch.setattr(module,"request_provider",fake);initialize()
+    result=await AIRouter("default").chat("summary",[{"role":"user","content":"hello"}])
+    assert result["provider"].startswith("Pollinations")
+    assert rows("SELECT COUNT(*) n FROM ai_request_log WHERE status='success'")[0]["n"]==1
+
 def test_accessibility_and_motion_contract():
     html=open("backend/static/index.html",encoding="utf-8").read();css=open("backend/static/style.css",encoding="utf-8").read()
     assert 'aria-label="Primary"' in html and 'aria-live="polite"' in html

@@ -11,7 +11,7 @@ import httpx
 from backend.core.config_new import settings
 from backend.db.local import execute, now, rows, uid
 
-TASKS=("resume-extraction","evidence-normalization","recruiter-review","tailor","cover-letter","interview-prep","star-coach","summary","dossier")
+TASKS=("resume-extraction","evidence-normalization","recruiter-review","tailor","cover-letter","interview-prep","star-coach","summary","dossier","gap-analysis","answer-sheet")
 
 @dataclass
 class Provider:
@@ -31,6 +31,12 @@ def configured_providers()->list[Provider]:
         providers.append(Provider("gemini","Google Gemini","gemini","https://generativelanguage.googleapis.com",settings.GEMINI_API_KEY,settings.GEMINI_MODEL,False,False,50))
     if settings.OPENROUTER_API_KEY and settings.OPENROUTER_MODEL:
         providers.append(Provider("openrouter","OpenRouter","openai","https://openrouter.ai/api/v1",settings.OPENROUTER_API_KEY,settings.OPENROUTER_MODEL,False,False,60))
+    if settings.CEREBRAS_API_KEY:
+        providers.append(Provider("cerebras","Cerebras (free tier)","openai",settings.CEREBRAS_BASE_URL,settings.CEREBRAS_API_KEY,settings.CEREBRAS_MODEL,False,False,65))
+    if settings.MISTRAL_API_KEY:
+        providers.append(Provider("mistral","Mistral (free tier)","openai",settings.MISTRAL_BASE_URL,settings.MISTRAL_API_KEY,settings.MISTRAL_MODEL,False,False,70))
+    if settings.POLLINATIONS_ENABLED:
+        providers.append(Provider("pollinations","Pollinations (no key needed)","openai",settings.POLLINATIONS_BASE_URL,"",settings.POLLINATIONS_MODEL,False,False,80))
     if settings.AI_LOCAL_FALLBACK and settings.OLLAMA_MODEL:
         providers.append(Provider("ollama","Local Ollama","openai",settings.OLLAMA_BASE_URL,"ollama",settings.OLLAMA_MODEL,True,False,999))
     return providers
@@ -74,7 +80,7 @@ async def request_provider(provider:Provider,messages:list[dict[str,str]])->str:
             text="\n\n".join(f"{x['role'].upper()}: {x['content']}" for x in messages)
             response=await client.post(f"{provider.base_url.rstrip('/')}/v1beta/models/{provider.model}:generateContent",params={"key":provider.key},json={"contents":[{"parts":[{"text":text}]}],"generationConfig":{"temperature":0}})
             response.raise_for_status();return response.json()["candidates"][0]["content"]["parts"][0]["text"]
-        response=await client.post(provider.base_url.rstrip("/")+"/chat/completions",headers={"Authorization":f"Bearer {provider.key}","Content-Type":"application/json"},json={"model":provider.model,"messages":messages,"temperature":0})
+        response=await client.post(provider.base_url.rstrip("/")+"/chat/completions",headers={"Authorization":f"Bearer {provider.key}","Content-Type":"application/json"} if provider.key else {"Content-Type":"application/json"},json={"model":provider.model,"messages":messages,"temperature":0})
         response.raise_for_status();return response.json()["choices"][0]["message"]["content"]
 
 def retryable(exc:Exception)->tuple[bool,str,int|None]:
@@ -87,7 +93,7 @@ def retryable(exc:Exception)->tuple[bool,str,int|None]:
 class AIRouter:
     def __init__(self,owner_id:str):self.owner_id=owner_id
     @property
-    def enabled(self)->bool:return bool(configured_providers())
+    def enabled(self)->bool:return bool(configured_providers()) or settings.POLLINATIONS_ENABLED
     async def chat(self,task:str,messages:list[dict[str,str]])->dict[str,Any]:
         providers=ensure_router(self.owner_id);route,config=route_for(self.owner_id,task,providers)
         if not route:raise RuntimeError("No healthy AI provider is configured for this task")
