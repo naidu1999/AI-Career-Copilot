@@ -1,6 +1,10 @@
 """Candidate boards. Every board is verified at runtime before it is enabled."""
 SEED_SOURCES = [
     ("Arbeitnow", "arbeitnow", "global", True),
+    ("Remotive", "remotive", "global", True),
+    ("RemoteOK", "remoteok", "global", True),
+    ("Jobicy", "jobicy", "global", True),
+    ("Himalayas", "himalayas", "global", True),
     ("Adzuna India", "adzuna", "india", True),
     ("Jooble", "jooble", "global", True),
     ("USAJOBS", "usajobs", "federal", False),

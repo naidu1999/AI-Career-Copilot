@@ -179,6 +179,67 @@ async def jooble(_board: str, _company: str, profile: dict) -> list[Job]:
         iso(j.get("updated")),"updated",j.get("type",""),j) for j in data.get("jobs",[]) if j.get("link")]
 
 
+async def remotive(_board: str, _company: str, profile: dict) -> list[Job]:
+    """Remotive public API: documented, keyless, remote-first listings worldwide."""
+    titles=(profile.get("target_titles") or ["developer"])[:2]
+    out=[];seen=set()
+    async with httpx.AsyncClient(timeout=30, follow_redirects=False) as client:
+        for title in titles:
+            data=(await client.get("https://remotive.com/api/remote-jobs",params={"limit":60,"title":title})).raise_for_status().json()
+            for j in data.get("jobs",[]):
+                jid=str(j.get("id") or j.get("url"))
+                if jid in seen:continue
+                seen.add(jid)
+                out.append(Job(key("remotive",jid),"remotive","Remotive",j.get("title",""),j.get("company_name",""),
+                    j.get("candidate_required_location","") or "Remote",clean_html(j.get("description","")),j.get("url",""),
+                    iso(j.get("publication_date")),"posted",j.get("job_type","") or "",j))
+    return [x for x in out if x.url]
+
+
+async def remoteok(_board: str, _company: str, _profile: dict) -> list[Job]:
+    """RemoteOK public API: keyless tech-remote feed (first element is a legal notice)."""
+    async with httpx.AsyncClient(timeout=30, follow_redirects=False, headers={"User-Agent":"KarnaOS/1.0 (career assistant)"}) as client:
+        data=(await client.get("https://remoteok.com/api")).raise_for_status().json()
+    out=[]
+    for j in data if isinstance(data,list) else []:
+        if not isinstance(j,dict) or not (j.get("position") or j.get("url")):continue
+        jid=str(j.get("id") or j.get("slug") or j.get("url"))
+        out.append(Job(key("remoteok",jid),"remoteok","RemoteOK",j.get("position",""),j.get("company",""),
+            j.get("location","") or "Remote",clean_html(j.get("description","")),j.get("url","") or j.get("apply_url",""),
+            iso(j.get("date")),"posted",j.get("type","") or "",j))
+    return [x for x in out if x.url][:80]
+
+
+async def jobicy(_board: str, _company: str, _profile: dict) -> list[Job]:
+    """Jobicy public API v2: keyless remote jobs across industries."""
+    async with httpx.AsyncClient(timeout=30, follow_redirects=False) as client:
+        data=(await client.get("https://jobicy.com/api/v2/remote-jobs",params={"count":50})).raise_for_status().json()
+    out=[]
+    for j in data.get("jobs",[]):
+        jid=str(j.get("id") or j.get("url"))
+        out.append(Job(key("jobicy",jid),"jobicy","Jobicy",j.get("jobTitle",""),j.get("companyName",""),
+            "Remote",clean_html(j.get("jobDescription","") or j.get("jobExcerpt","")),j.get("url",""),
+            iso(j.get("pubDate")),"posted",j.get("jobLevel","") or "",j))
+    return [x for x in out if x.url]
+
+
+async def himalayas(_board: str, _company: str, _profile: dict) -> list[Job]:
+    """Himalayas public API: keyless remote jobs feed."""
+    async with httpx.AsyncClient(timeout=30, follow_redirects=False) as client:
+        data=(await client.get("https://himalayas.app/jobs/api",params={"limit":60})).raise_for_status().json()
+    out=[]
+    for j in data.get("jobs",[]):
+        loc="Remote"
+        restrictions=j.get("locationRestrictions")
+        if isinstance(restrictions,list) and restrictions:
+            loc=", ".join((x.get("name") if isinstance(x,dict) else str(x)) or "" for x in restrictions).strip(", ") or "Remote"
+        jid=str(j.get("guid") or j.get("applicationLink") or j.get("title"))
+        out.append(Job(key("himalayas",jid),"himalayas","Himalayas",j.get("title",""),j.get("companyName",""),loc,
+            clean_html(j.get("descriptionPlain","") or j.get("excerpt","")),j.get("applicationLink","") or j.get("guid",""),
+            iso(j.get("pubDate")),"posted",j.get("employmentType","") or "",j))
+    return [x for x in out if x.url]
+
+
 async def usajobs(_board: str, _company: str, profile: dict) -> list[Job]:
     if not settings.USAJOBS_API_KEY or not settings.USAJOBS_EMAIL:
         raise ValueError("USAJOBS is not configured in .env")
@@ -201,9 +262,10 @@ PROVIDERS = {
     "greenhouse":greenhouse, "lever":lever, "ashby":ashby,
     "smartrecruiters":smartrecruiters, "recruitee":recruitee,
     "arbeitnow":arbeitnow, "adzuna":adzuna, "jooble":jooble, "usajobs":usajobs,
+    "remotive":remotive, "remoteok":remoteok, "jobicy":jobicy, "himalayas":himalayas,
 }
 
-GLOBAL_PROVIDERS={"arbeitnow","adzuna","jooble","usajobs"}
+GLOBAL_PROVIDERS={"arbeitnow","adzuna","jooble","usajobs","remotive","remoteok","jobicy","himalayas"}
 
 async def fetch_jobs(provider: str, board: str, company: str, profile: dict) -> list[Job]:
     if provider not in PROVIDERS: raise ValueError(f"Unsupported provider: {provider}")

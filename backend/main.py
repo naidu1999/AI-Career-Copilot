@@ -56,7 +56,7 @@ def ensure_profile(pid:str,email:str=""):
     # boards enable only when their credentials exist.
     if not hosted() and not rows("SELECT id FROM job_sources WHERE owner_id=? LIMIT 1",(pid,)):
         for name,provider,board,default_enabled in SEED_SOURCES:
-            enabled=default_enabled and (provider=="arbeitnow" or provider=="adzuna" and bool(settings.ADZUNA_APP_ID) or provider=="jooble" and bool(settings.JOOBLE_API_KEY))
+            enabled=default_enabled and (provider=="arbeitnow" or provider in {"remotive","remoteok","jobicy","himalayas"} or provider=="adzuna" and bool(settings.ADZUNA_APP_ID) or provider=="jooble" and bool(settings.JOOBLE_API_KEY))
             execute("INSERT INTO job_sources (id,name,provider,board_key,enabled,created_at,owner_id) VALUES (?,?,?,?,?,?,?)",(uid(),name,provider,board,int(enabled),ts,pid))
 
 async def lifecycle_check():
@@ -412,7 +412,7 @@ def seed_sources():
     added=0
     for name,provider,board,default_enabled in SEED_SOURCES:
         if not rows("SELECT id FROM job_sources WHERE owner_id=? AND provider=? AND board_key=?",(user_id(),provider,board)):
-            enabled=default_enabled and (provider=="arbeitnow" or provider=="adzuna" and bool(settings.ADZUNA_APP_ID) or provider=="jooble" and bool(settings.JOOBLE_API_KEY))
+            enabled=default_enabled and (provider=="arbeitnow" or provider in {"remotive","remoteok","jobicy","himalayas"} or provider=="adzuna" and bool(settings.ADZUNA_APP_ID) or provider=="jooble" and bool(settings.JOOBLE_API_KEY))
             execute("INSERT INTO job_sources (id,name,provider,board_key,enabled,created_at,owner_id) VALUES (?,?,?,?,?,?,?)",(uid(),name,provider,board,int(enabled),now(),user_id()));added+=1
     return {"added":added}
 @app.post("/api/sources",status_code=201)
