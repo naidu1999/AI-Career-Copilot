@@ -1,12 +1,16 @@
 import asyncio
 import json
+import logging
+import queue
 import re
+import threading
 from datetime import datetime, timedelta, timezone
 
 from backend.db.local import connection, execute, now, rows, uid
 from backend.jobs.matcher import match_job
 from backend.jobs.providers import canonical_key, fetch_jobs, fingerprint
 
+LOG=logging.getLogger("karna.recalc")
 ATS_PROVIDERS={'greenhouse','lever','ashby','smartrecruiters','recruitee'}
 
 
@@ -19,13 +23,68 @@ def profile_for_matching(profile: dict) -> dict:
     return profile
 
 
+_recalculating:set[str]=set()
+
 def recalculate(profile: dict, touched:set[str]|None=None) -> None:
     """Recompute match rows.
 
     touched=None (profile changed) re-matches every active job. A scan passes
     only the job ids it inserted or refreshed, so a typical scan re-matches a
     few hundred postings instead of the whole table.
+
+    Calls are coalesced per profile: while one full pass is running, further
+    requests for the same profile are dropped (the running pass already reads
+    the latest profile row). This keeps rapid saves from queueing up
+    multi-minute backlogs that freeze the app.
     """
+    pid=profile["id"]
+    if pid in _recalculating:return
+    _recalculating.add(pid)
+    try:
+        _recalculate_now(profile,touched)
+    finally:
+        _recalculating.discard(pid)
+
+# Background re-matching: request_recalc() returns instantly and a single
+# daemon worker performs the (potentially ~40s) full pass off the request
+# path. The profile row is re-read inside the worker, so a save that lands
+# while another pass is running is always matched with the newest data.
+_recalc_q:"queue.Queue[str]"=queue.Queue()
+_recalc_queued:set[str]=set()
+_recalc_lock=threading.Lock()
+_recalc_worker_started=False
+
+def request_recalc(pid:str) -> None:
+    """Schedule a full match recompute for a profile without blocking."""
+    global _recalc_worker_started
+    with _recalc_lock:
+        if pid in _recalc_queued:return
+        _recalc_queued.add(pid)
+        if not _recalc_worker_started:
+            _recalc_worker_started=True
+            threading.Thread(target=_recalc_worker,daemon=True,name="karna-recalc").start()
+    _recalc_q.put(pid)
+
+def _decode_profile_row(row) -> dict:
+    prof=dict(row)
+    for field in ("target_titles","skills","locations","excluded_roles","excluded_employment_types","remote_countries","preferred_industries","preferred_employment_types"):
+        value=prof.get(field)
+        if isinstance(value,str):
+            try:prof[field]=json.loads(value)
+            except Exception:prof[field]=[]
+    return prof
+
+def _recalc_worker() -> None:
+    while True:
+        pid=_recalc_q.get()
+        with _recalc_lock:_recalc_queued.discard(pid)
+        try:
+            row=rows("SELECT * FROM profiles WHERE id=?",(pid,))
+            if row:recalculate(_decode_profile_row(row[0] if isinstance(row,list) else row))
+        except Exception:
+            LOG.exception("Background match recompute failed for profile %s",pid)
+
+def _recalculate_now(profile: dict, touched:set[str]|None=None) -> None:
     p=profile_for_matching(profile)
     pid=profile["id"]
     # One transaction avoids opening two SQLite connections for every job.

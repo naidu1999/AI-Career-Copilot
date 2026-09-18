@@ -23,7 +23,7 @@ from backend.jobs.catalog import SEED_SOURCES
 from backend.jobs.providers import GLOBAL_PROVIDERS, PROVIDERS, canonical_key, fetch_jobs, key
 from backend.services.ai_router import AIRouter, router_status
 from backend.services.continuity import enqueue, status as sync_status, sync_pending
-from backend.services.discovery import recalculate, scan
+from backend.services.discovery import recalculate, request_recalc, scan
 from backend.services.dossier import basic_dossier, dossier_prompt, legitimacy_check, parse_dossier_json
 from backend.services.document_service import SUPPORTED, extract_text, file_hash, safe_filename, valid_signature
 from backend.services.profile_parser import parse_resume
@@ -142,6 +142,10 @@ async def security_headers(request,call_next):
     finally:
         if token_handle is not None:current_user_id.reset(token_handle)
     if refresh_data:set_session_cookies(response,refresh_data)
+    if request.url.path.startswith("/static/"):
+        # Static assets change between runs; always revalidate so the
+        # dashboard never serves stale JavaScript after an update.
+        response.headers["Cache-Control"]="no-cache"
     response.headers["X-Content-Type-Options"]="nosniff"
     response.headers["X-Request-ID"]=request_id
     response.headers["X-Frame-Options"]="DENY"
@@ -254,7 +258,10 @@ def get_profile():return get_profile_data()
 def update_profile(p:ProfileUpdate):
     values=(p.full_name,p.email,p.current_employer,p.current_role,json.dumps(p.target_titles),json.dumps(p.skills),json.dumps(p.locations),int(p.remote_allowed),json.dumps(p.excluded_roles),json.dumps(p.excluded_employment_types),p.country,json.dumps(p.remote_countries),p.years_experience,p.relevant_experience,p.minimum_match_score,p.work_authorization,int(p.needs_sponsorship),p.notice_period_days,p.expected_compensation,json.dumps(p.preferred_industries),json.dumps(p.preferred_employment_types),now())
     execute("UPDATE profiles SET full_name=?,email=?,current_employer=?,current_role=?,target_titles=?,skills=?,locations=?,remote_allowed=?,excluded_roles=?,excluded_employment_types=?,country=?,remote_countries=?,years_experience=?,relevant_experience=?,minimum_match_score=?,work_authorization=?,needs_sponsorship=?,notice_period_days=?,expected_compensation=?,preferred_industries=?,preferred_employment_types=?,updated_at=? WHERE id=?",values+(user_id(),))
-    profile=get_profile_data();enqueue(user_id(),"profile",user_id(),"upsert",profile);recalculate(profile);return profile
+    profile=get_profile_data();enqueue(user_id(),"profile",user_id(),"upsert",profile)
+    # Full re-matching (~8k jobs) runs on the background worker; the save
+    # returns instantly instead of blocking the browser for ~40 seconds.
+    request_recalc(profile["id"]);return profile
 
 class ProfileCreate(BaseModel):
     id:str="";label:str="";full_name:str="";email:str=""
@@ -285,19 +292,30 @@ def switch_profile(item:ProfileSwitch):
     return response
 @app.delete("/api/profiles/{pid}")
 def delete_profile(pid:str,response:Response):
-    """Remove a local profile workspace and every row it owns."""
+    """Remove a local profile workspace and every row it owns.
+
+    The default profile is deletable too: its data is wiped and the row reset
+    to a clean workspace ("Default profile"), so the app always has a valid
+    active profile. The last remaining profile cannot be deleted.
+    """
     if hosted():raise HTTPException(403,"Hosted accounts use /api/account instead")
-    if pid=="default":raise HTTPException(400,"The default profile cannot be deleted")
     if not rows("SELECT id FROM profiles WHERE id=?",(pid,)):raise HTTPException(404,"Profile not found")
+    if not [x["id"] for x in rows("SELECT id FROM profiles WHERE id!=?",(pid,))]:raise HTTPException(400,"The last remaining profile cannot be deleted")
     resume_paths=[Path(x["storage_path"]) for x in rows("SELECT storage_path FROM resumes WHERE profile_id=?",(pid,))]
     with connection() as db:
         app_ids=[x[0] for x in db.execute("SELECT id FROM applications WHERE profile_id=?",(pid,))]
         for aid in app_ids:db.execute("DELETE FROM application_events WHERE application_id=?",(aid,))
-        for table,column in (("applications","profile_id"),("job_matches","profile_id"),("career_evidence","profile_id"),("resumes","profile_id"),("job_sources","owner_id"),("notifications","owner_id"),("scan_runs","owner_id"),("generated_artifacts","owner_id"),("ai_providers","owner_id"),("ai_routes","owner_id"),("ai_request_log","owner_id"),("interview_prep","owner_id"),("sync_outbox","owner_id"),("hidden_jobs","owner_id")):db.execute(f"DELETE FROM {table} WHERE {column}=?",(pid,))
-        db.execute("DELETE FROM profiles WHERE id=?",(pid,))
+        for table,column in (("applications","profile_id"),("job_matches","profile_id"),("career_evidence","profile_id"),("resumes","profile_id"),("job_sources","owner_id"),("notifications","owner_id"),("scan_runs","owner_id"),("generated_artifacts","owner_id"),("ai_providers","owner_id"),("ai_routes","owner_id"),("ai_request_log","owner_id"),("interview_prep","owner_id"),("story_bank","owner_id"),("fit_dossiers","owner_id"),("backup_records","owner_id"),("sync_outbox","owner_id"),("hidden_jobs","owner_id")):db.execute(f"DELETE FROM {table} WHERE {column}=?",(pid,))
+        if pid=="default":
+            db.execute("UPDATE profiles SET full_name='Default profile',email='',current_employer='',current_role='',target_titles='[]',skills='[]',locations='[]',remote_allowed=1,excluded_roles='[]',excluded_employment_types='[]',country='India',remote_countries=\'[\"India\"]\',years_experience=0,relevant_experience=0,minimum_match_score=55,work_authorization=\'India\',needs_sponsorship=0,notice_period_days=45,expected_compensation=\'8-12 LPA\',preferred_industries=\'[]\',preferred_employment_types=\'[\"full-time\"]\',updated_at=? WHERE id=?",(now(),pid))
+        else:
+            db.execute("DELETE FROM profiles WHERE id=?",(pid,))
     for path in resume_paths:
         if path.is_file() and path.parent.resolve()==settings.upload_path.resolve():path.unlink()
-    response.delete_cookie(PROFILE_COOKIE,path="/")
+    if pid=="default":
+        response.delete_cookie(PROFILE_COOKIE,path="/")
+    else:
+        response.set_cookie(PROFILE_COOKIE,"default",samesite="lax",max_age=60*60*24*365,path="/")
     return {"ok":True}
 
 def add_evidence(rid:str,category:str,value:str,confidence=.72,section=""):
@@ -324,7 +342,7 @@ async def upload_resume(file:UploadFile=File(...)):
     for category in ("experience","projects","education","certifications","achievements"):
         for item in parsed.get(category,[])[:30]:add_evidence(rid,category.rstrip("s"),item.get("raw_text",str(item)),.65,category)
     enqueue(user_id(),"resume",rid,"upsert",{"id":rid,"file_name":file.filename,"file_hash":digest,"status":"review_required","created_at":now()})
-    recalculate(get_profile_data());return {"id":rid,"file_name":file.filename,"structured":parsed}
+    request_recalc(user_id());return {"id":rid,"file_name":file.filename,"structured":parsed}
 @app.get("/api/resumes")
 def list_resumes():
     data=rows("SELECT id,file_name,file_type,file_size,status,created_at,structured_json FROM resumes WHERE profile_id=? ORDER BY created_at DESC",(user_id(),))
@@ -435,7 +453,7 @@ def manual_job(item:ManualJob):
     url=str(item.url);sid=key("manual",url);canonical=canonical_key(item.company,item.title,item.location)
     if rows("SELECT id FROM jobs WHERE source_key=?",(sid,)):raise HTTPException(409,"Job URL is already saved")
     execute("INSERT INTO jobs (id,source_key,provider,source_name,title,company,location,description,url,posted_at,first_seen_at,date_semantics,employment_type,is_active,raw_json,last_seen_at,liveness_status,canonical_key) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",(uid(),sid,"manual","Manual import",item.title,item.company,item.location,item.description,url,item.posted_at,now(),"user_supplied",item.employment_type,1,"{}",now(),"unknown",canonical))
-    recalculate(get_profile_data());return {"ok":True}
+    request_recalc(user_id());return {"ok":True}
 @app.get("/api/jobs")
 def list_jobs(hours:int=48,provider:str="",classification:str="qualified",company:str="",q:str="",strict_date:bool=True,minimum_score:float=0,limit:int=200,offset:int=0):
     profile=get_profile_data();threshold=max(minimum_score,0);cutoff=(datetime.now(timezone.utc)-timedelta(hours=max(1,hours))).isoformat() if hours>=0 else ""

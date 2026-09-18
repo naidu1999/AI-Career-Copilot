@@ -63,7 +63,14 @@ def test_end_to_end_upload_evidence_match_save_status(tmp_path,monkeypatch):
         assert client.patch(f"/api/evidence/{evidence[0]['id']}",json={"status":"verified"}).status_code==200
         job={"title":"Data Analyst","company":"Example","location":"Bengaluru","description":"Python SQL Power BI, 2 years","url":"https://example.test/jobs/analyst","employment_type":"full-time"}
         assert client.post("/api/jobs/manual",json=job).status_code==201
-        matches=client.get("/api/jobs?classification=all&strict_date=false&hours=720").json();assert matches
+        from time import monotonic, sleep
+        matches=[]
+        deadline=monotonic()+10
+        while monotonic()<deadline:
+            matches=client.get("/api/jobs?classification=all&strict_date=false&hours=720").json()
+            if matches:break
+            sleep(0.2)
+        assert matches,"background re-match should produce the manual job's match"
         saved=client.post("/api/applications",json={"job_id":matches[0]["id"],"status":"shortlisted"}).json()
         update={"status":"interview","notes":"Round one","recruiter_name":"A","recruiter_contact":"","follow_up_at":None,"interview_at":None,"deadline_at":None,"rejection_reason":"","salary_details":"","offer_details":""}
         assert client.patch(f"/api/applications/{saved['id']}",json=update).status_code==200

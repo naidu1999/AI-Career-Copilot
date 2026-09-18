@@ -55,7 +55,18 @@ def test_local_multiuser_profiles(tmp_path, monkeypatch):
         gone=client.delete("/api/profiles/priya")
         assert gone.status_code==200
         assert client.get("/api/profile").json()["id"]=="default"
+        assert client.get("/api/profiles").json() and client.get("/api/profiles").json()[0]["id"]=="default"
+        # Deleting the last remaining profile is refused.
         assert client.delete("/api/profiles/default").status_code==400
+        # With another profile present, default is deletable: it resets to a
+        # clean workspace instead of vanishing, and the switch falls back.
+        client.post("/api/profiles",json={"id":"arjun","full_name":"Arjun Rao"})
+        client.post("/api/session/profile",json={"profile_id":"default"})
+        wiped=client.delete("/api/profiles/default")
+        assert wiped.status_code==200
+        assert client.get("/api/profile").json()["id"]=="default"
+        reset=client.get("/api/profile").json()
+        assert reset["full_name"]=="Default profile" and reset["target_titles"]==[]
 
 def test_dossier_storybank_and_intel(tmp_path, monkeypatch):
     from backend.core.config_new import settings
@@ -98,6 +109,14 @@ def test_v04_manual_job_match_and_application(tmp_path, monkeypatch):
              "description":"Python SQL, 2 years experience","url":"https://example.com/jobs/1",
              "employment_type":"full-time"}
         assert client.post("/api/jobs/manual",json=job).status_code==201
+        from time import monotonic, sleep
+        deadline=monotonic()+10
+        matches=[]
+        while monotonic()<deadline:
+            matches=client.get("/api/jobs",params={"classification":"all","strict_date":"false","minimum_score":0,"hours":720}).json()
+            if matches:break
+            sleep(0.2)
+        assert matches,"background re-match should produce the manual job's match"
         matches=client.get("/api/jobs?classification=all&strict_date=false&hours=720").json()
         assert len(matches)==1 and matches[0]["matcher_version"]=="4.0"
         assert set(matches[0]["components"]) >= {"title","skills","location","experience"}
