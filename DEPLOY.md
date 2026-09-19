@@ -82,6 +82,42 @@ Sign-up is now open at `/app` → each user gets an isolated workspace (own resu
 
 ---
 
+## Path C — Hugging Face Spaces (free hosting)
+
+Runs the same Docker image on Hugging Face's free tier: `https://<your-name>-karna-os.hf.space`, HTTPS included, no card required.
+
+### How it stays free (and keeps your data)
+
+Free Spaces have an **ephemeral disk** and sleep after ~48h of inactivity. Karna OS handles this with **cloud snapshots**: on boot it restores the newest database snapshot, while running it uploads one every 20 minutes, and on shutdown it saves a final copy — all into a **private Supabase Storage bucket** (free tier). One honest caveat: the *parsed contents* of your resume live in the database and survive; the original uploaded PDF lives on the ephemeral disk, so re-upload the PDF after a cold restart.
+
+### Steps
+
+1. **Create the Space** — huggingface.co → New Space → name it `karna-os` → SDK: **Docker** → Public (or Private on the free tier) → Create.
+2. **Push the code** — upload/push the repo (Dockerfile, `backend/`, `requirements.txt`, `README.md` with the `sdk: docker` frontmatter). Do **not** upload `.env` or `data/`.
+3. **Add secrets** — Space → Settings → *Variables and secrets*:
+   | Secret | Value |
+   |---|---|
+   | `SUPABASE_URL` | your Supabase project URL |
+   | `SUPABASE_SECRET_KEY` | service_role key |
+   | `SNAPSHOT_ENABLED` | `true` |
+   | `SNAPSHOT_BUCKET` | `karna-snapshots` |
+   | `SCAN_ENABLED` | `false` (recommended — scans need live outbound time) |
+4. The Space builds (~5 min) and serves at `https://<name>-karna-os.hf.space`.
+5. **Supabase side**: nothing to pre-create — the app makes the storage bucket on first upload.
+
+### Multi-user on the Space
+
+- **Just you:** leave `DEPLOYMENT_MODE=local` — your workspace restores from snapshots.
+- **Team/public:** set `DEPLOYMENT_MODE=hosted` and complete the Supabase auth checklist from Path B (same keys, one project). Every visitor signs up and gets an isolated workspace.
+
+### Free-tier limits (honest numbers)
+
+- 2 vCPU / 16 GB RAM, no GPU — plenty for this app
+- Sleeps after ~48h idle; wakes on the next visit (first load after sleep takes ~1 min while the snapshot restores)
+- Snapshot size: the database gzips to a few MB — far under Supabase's free 1 GB
+
+---
+
 ## Production checklist
 
 | Item | Value / check |

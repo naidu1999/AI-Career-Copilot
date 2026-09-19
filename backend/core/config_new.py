@@ -13,6 +13,13 @@ class Settings(BaseSettings):
     SUPABASE_PUBLISHABLE_KEY: str = ""
     SUPABASE_SECRET_KEY: str = ""
     SUPABASE_DATABASE_URL: str = ""
+    # Whole-database snapshot persistence for ephemeral hosts (HF Spaces etc.):
+    # gzip the SQLite DB into Supabase Storage on a timer + at shutdown, restore
+    # the newest snapshot at boot. Keeps a free deployment from losing data.
+    SNAPSHOT_ENABLED: bool = False
+    SNAPSHOT_BUCKET: str = "karna-snapshots"
+    SNAPSHOT_INTERVAL_MINUTES: int = 20
+    SNAPSHOT_KEEP: int = 10
     AI_PROVIDER: str = "rules"
     AI_BASE_URL: str = "http://localhost:11434/v1"
     AI_API_KEY: str = "ollama"

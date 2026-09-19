@@ -23,6 +23,7 @@ from backend.jobs.catalog import SEED_SOURCES
 from backend.jobs.providers import GLOBAL_PROVIDERS, PROVIDERS, canonical_key, fetch_jobs, key
 from backend.services.ai_router import AIRouter, router_status
 from backend.services.continuity import enqueue, status as sync_status, sync_pending
+from backend.services import cloud_snapshots
 from backend.services import linkedin_import
 from backend.services.discovery import recalculate, request_recalc, scan
 from backend.services.dossier import basic_dossier, dossier_prompt, legitimacy_check, parse_dossier_json
@@ -117,9 +118,15 @@ def catchup_backup()->str|None:
 
 @asynccontextmanager
 async def lifespan(_app):
-    initialize(); catchup_backup(); task=asyncio.create_task(scheduler_loop()) if settings.SCAN_ENABLED else None
+    restored=cloud_snapshots.restore_latest_snapshot()
+    if restored.get("restored"):LOG.info("database restored from cloud snapshot")
+    initialize(); catchup_backup()
+    task=asyncio.create_task(scheduler_loop()) if settings.SCAN_ENABLED else None
+    snap=asyncio.create_task(cloud_snapshots.snapshot_loop()) if cloud_snapshots.configured() else None
     yield
+    cloud_snapshots.shutdown_snapshot()
     if task: task.cancel()
+    if snap: snap.cancel()
 
 app=FastAPI(title=settings.APP_NAME,version=settings.APP_VERSION,lifespan=lifespan)
 static=Path(__file__).parent/"static"; app.mount("/static",StaticFiles(directory=static),name="static")

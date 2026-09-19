@@ -134,3 +134,38 @@ def test_accessibility_and_motion_contract():
     html=open("backend/static/index.html",encoding="utf-8").read();css=open("backend/static/style.css",encoding="utf-8").read()
     assert 'aria-label="Primary"' in html and 'aria-live="polite"' in html
     assert "prefers-reduced-motion" in css and ".score-ring" in css and ".skeleton-card" in css
+
+def test_cloud_snapshot_roundtrip(tmp_path,monkeypatch):
+    import gzip, json as _json
+    import backend.services.cloud_snapshots as cs
+    from backend.core.config_new import settings
+    dbfile=tmp_path/"karna.db"; dbfile.write_bytes(b"SQDATA"*100)
+    monkeypatch.setattr(settings,"DATABASE_PATH",str(dbfile))
+    monkeypatch.setattr(settings,"SNAPSHOT_ENABLED",True)
+    monkeypatch.setattr(settings,"SUPABASE_URL","https://supabase.example.co")
+    monkeypatch.setattr(settings,"SUPABASE_SECRET_KEY","service-key")
+    store={}
+    class FakeResp:
+        def __init__(self,status_code=200,content=b"",body="[]"): self.status_code=status_code; self.content=content; self._body=body
+        def raise_for_status(self):pass
+        def json(self):return _json.loads(self._body)
+    class FakeClient:
+        def __init__(self,*a,**k):pass
+        def __enter__(self):return self
+        def __exit__(self,*a):return False
+        def post(self,url,headers=None,content=b"",json=None):
+            if url.endswith("/latest"):store["latest"]=content;return FakeResp(200)
+            return FakeResp(200)
+        def get(self,url,**k):
+            if url.endswith("/latest"):return FakeResp(200,store.get("latest",b""))
+            if "/list/" in url:return FakeResp(200,body="[]")
+            return FakeResp(200)
+        def delete(self,url,**k):return FakeResp(200)
+    monkeypatch.setattr(cs.httpx,"Client",FakeClient)
+    up=cs.upload_snapshot()
+    assert up["uploaded"] and store["latest"]
+    assert gzip.decompress(store["latest"])==b"SQDATA"*100
+    target=tmp_path/"fresh"/"karna.db"
+    monkeypatch.setattr(settings,"DATABASE_PATH",str(target))
+    res=cs.restore_latest_snapshot()
+    assert res["restored"] and target.read_bytes()==b"SQDATA"*100

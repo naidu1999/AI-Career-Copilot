@@ -1,3 +1,13 @@
+---
+title: Karna OS
+emoji: 🎯
+colorFrom: blue
+colorTo: pink
+sdk: docker
+app_port: 8000
+pinned: false
+---
+
 # Karna OS v1.1 Continuity
 
 Karna OS is a personal, local-first career operating system. It discovers permitted job
