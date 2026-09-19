@@ -76,6 +76,12 @@ def main() -> int:
             arcname = Path("karna_os") / path.relative_to(ROOT)
             if path.name == ".env.example":
                 zf.writestr(str(arcname), sanitize_env_example(path.read_text(encoding="utf-8")))
+            elif path.name == "Start-Karna-OS.command":
+                # ZIPs built on Windows lose the Unix exec bit; set it so the
+                # macOS double-click launcher works straight from the archive.
+                info = zipfile.ZipInfo(str(arcname))
+                info.external_attr = 0o755 << 16
+                zf.writestr(info, path.read_text(encoding="utf-8"), compress_type=zipfile.ZIP_DEFLATED)
             else:
                 zf.write(path, str(arcname))
 

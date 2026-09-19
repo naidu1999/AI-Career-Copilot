@@ -1,0 +1,66 @@
+════════════════════════════════════════════════════════════════
+  KARNA OS — SETUP GUIDE (for friends)
+════════════════════════════════════════════════════════════════
+
+WHAT YOU GET
+  Your own private career assistant: upload your resume, scan live
+  job boards, see matches ranked best-first, generate tailored
+  resumes & cover letters, and track every application.
+  Everything runs on YOUR computer — your data never leaves it.
+
+────────────────────────────────────────────────────────────────
+WINDOWS (10/11)
+────────────────────────────────────────────────────────────────
+  ONE-TIME (2 minutes):
+   1. Install Python:  https://www.python.org/downloads/
+      IMPORTANT: on the first screen tick "Add python.exe to PATH".
+   2. Extract this ZIP anywhere (your Desktop is fine).
+
+  EVERY TIME:
+   3. Double-click  Start-Karna-OS.bat
+      → First run installs everything automatically (1-3 minutes).
+      → Your browser opens the app by itself.
+
+────────────────────────────────────────────────────────────────
+MAC
+────────────────────────────────────────────────────────────────
+  ONE-TIME (2 minutes):
+   1. Install Python:  https://www.python.org/downloads/
+      (version 3.12 — newer Macs already have a working python3)
+   2. Extract this ZIP anywhere.
+   3. In the extracted folder: right-click  Start-Karna-OS.command
+      → Open. (First time only — macOS asks to confirm; click Open.
+       If it says "Permission denied", open Terminal, drag the file
+       in, press Enter, then double-click it again.)
+
+  EVERY TIME:
+   4. Double-click  Start-Karna-OS.command
+      → Your browser opens the app by itself.
+      → Keep the Terminal window open while you use it.
+
+────────────────────────────────────────────────────────────────
+USING KARNA OS
+────────────────────────────────────────────────────────────────
+  • Start screen → upload your resume (PDF or DOCX), pick your
+    target job titles, and press "Scan job boards".
+  • Matches → jobs ranked best-first. Filter, or use Quick apply
+    to open many application forms at once.
+  • Prepare → AI writes tailored resumes, cover letters and
+    interview practice. Works with no signup — for better quality
+    later, add a free Groq key in the .env file.
+  • Tracker → every application, with follow-up reminders.
+  • Profile → your skills, targets and contact details.
+
+────────────────────────────────────────────────────────────────
+GOOD TO KNOW
+────────────────────────────────────────────────────────────────
+  • Internet is needed for job scans and AI features only.
+  • Your data lives in the "data" folder. Nothing is uploaded
+    anywhere. Delete the folder = everything erased.
+  • To update later: replace the folder contents, keep "data".
+  • Job scans run while the app is open (daily at 8:00 if you
+    leave it running) plus a catch-up backup at every start.
+
+  Problems? First fix that works 90% of the time: delete the
+  ".venv" folder and double-click the launcher again.
+════════════════════════════════════════════════════════════════
