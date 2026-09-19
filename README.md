@@ -15,15 +15,18 @@ metadata, performs explainable deterministic matching, prepares evidence-grounde
 material and tracks applications. It never uploads a resume to job portals or submits an
 application automatically.
 
-## Windows 11 quick start
+## Windows 11 quick start (share this with friends)
 
-1. Install 64-bit Python 3.12 and verify: `py -3.12 --version`.
-2. Extract the ZIP outside OneDrive when possible.
-3. Double-click `run_windows.bat`.
-4. Open `http://127.0.0.1:8000`.
+1. Install Python from https://www.python.org/downloads/ — on the first screen
+   **tick "Add python.exe to PATH"** (any 3.12+ works; the launcher checks).
+2. Extract the ZIP anywhere (outside OneDrive when possible).
+3. Double-click **`Start-Karna-OS.bat`**.
+4. Your browser opens Karna OS automatically — `http://127.0.0.1:8000`.
 
-The first run creates `.venv`, installs dependencies and copies `.env.example` to
-`.env`. Do not use Python 3.14, commit `.env`, or place secrets in frontend files.
+The first run installs everything (1–3 minutes, one time). After that it starts
+in seconds. Your data lives in the local `data` folder and never leaves the
+machine — delete the extracted folder to erase everything. Do not use Python
+3.14, commit `.env`, or place secrets in frontend files.
 
 ## v1.1 capabilities
 
