@@ -99,7 +99,9 @@ def test_local_multiuser_profiles(tmp_path, monkeypatch):
         assert dup.status_code==409
         bad=client.post("/api/profiles",json={"id":"bad id!"})
         assert bad.status_code==422
-        gone=client.delete("/api/profiles/priya")
+        # Deletion demands an explicit confirm token (typed by the user).
+        assert client.delete("/api/profiles/priya").status_code==400
+        gone=client.delete("/api/profiles/priya?confirm=priya")
         assert gone.status_code==200
         assert client.get("/api/profile").json()["id"]=="default"
         assert client.get("/api/profiles").json() and client.get("/api/profiles").json()[0]["id"]=="default"
@@ -109,7 +111,7 @@ def test_local_multiuser_profiles(tmp_path, monkeypatch):
         # clean workspace instead of vanishing, and the switch falls back.
         client.post("/api/profiles",json={"id":"arjun","full_name":"Arjun Rao"})
         client.post("/api/session/profile",json={"profile_id":"default"})
-        wiped=client.delete("/api/profiles/default")
+        wiped=client.delete("/api/profiles/default?confirm=default")
         assert wiped.status_code==200
         assert client.get("/api/profile").json()["id"]=="default"
         reset=client.get("/api/profile").json()

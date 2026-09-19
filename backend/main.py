@@ -94,9 +94,30 @@ async def scheduler_loop():
         except Exception as exc:
             execute("INSERT INTO notifications (id,kind,title,message,related_id,is_read,created_at,owner_id) VALUES (?,?,?,?,?,?,?,?)",(uid(),"scheduler_error","Scheduled scan failed",str(exc)[:300],None,0,now(),"default"))
 
+def catchup_backup()->str|None:
+    """Back up at startup when the newest backup is stale.
+
+    The nightly backup only fires if the server happens to be running at
+    SCAN_HOUR_LOCAL; a laptop that boots later would go days without one.
+    This closes that gap: every server start guarantees recent protection.
+    """
+    try:
+        directory=Path(settings.BACKUP_DIR)
+        stamps=sorted(directory.glob("karna-os-*.db")) if directory.exists() else []
+        if stamps:
+            newest=max(stamps,key=lambda p:p.stat().st_mtime)
+            age=datetime.now(timezone.utc)-datetime.fromtimestamp(newest.stat().st_mtime,timezone.utc)
+            if age<timedelta(hours=20):return None
+        created=backup()
+        if created:LOG.info("startup catch-up backup: %s",created)
+        return created or None
+    except Exception:
+        LOG.exception("startup catch-up backup failed")
+        return None
+
 @asynccontextmanager
 async def lifespan(_app):
-    initialize(); task=asyncio.create_task(scheduler_loop()) if settings.SCAN_ENABLED else None
+    initialize(); catchup_backup(); task=asyncio.create_task(scheduler_loop()) if settings.SCAN_ENABLED else None
     yield
     if task: task.cancel()
 
@@ -332,7 +353,7 @@ def switch_profile(item:ProfileSwitch):
     response.set_cookie(PROFILE_COOKIE,item.profile_id,samesite="lax",max_age=60*60*24*365,path="/")
     return response
 @app.delete("/api/profiles/{pid}")
-def delete_profile(pid:str,response:Response):
+def delete_profile(pid:str,response:Response,request:Request):
     """Remove a local profile workspace and every row it owns.
 
     The default profile is deletable too: its data is wiped and the row reset
@@ -342,6 +363,8 @@ def delete_profile(pid:str,response:Response):
     if hosted():raise HTTPException(403,"Hosted accounts use /api/account instead")
     if not rows("SELECT id FROM profiles WHERE id=?",(pid,)):raise HTTPException(404,"Profile not found")
     if not [x["id"] for x in rows("SELECT id FROM profiles WHERE id!=?",(pid,))]:raise HTTPException(400,"The last remaining profile cannot be deleted")
+    confirm=request.query_params.get("confirm","")
+    if confirm!=pid:raise HTTPException(400,f"Confirmation required: pass the profile id ({pid}) as the confirm parameter")
     resume_paths=[Path(x["storage_path"]) for x in rows("SELECT storage_path FROM resumes WHERE profile_id=?",(pid,))]
     with connection() as db:
         app_ids=[x[0] for x in db.execute("SELECT id FROM applications WHERE profile_id=?",(pid,))]
