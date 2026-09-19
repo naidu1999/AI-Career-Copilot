@@ -34,8 +34,13 @@ if [ -z "$PYBIN" ]; then
   echo ""
   echo "  Karna OS needs Python 3.11, 3.12 or 3.13."
   echo ""
-  echo "  1. The download page is opening - install Python 3.12."
-  echo "  2. Then double-click this file again."
+  echo "  OPTION A - easiest, nothing to download:"
+  echo "    Open Terminal (Apps > Utilities > Terminal) and type:"
+  echo "        xcode-select --install"
+  echo "    Approve the window that appears. It installs Python in ~1 minute."
+  echo ""
+  echo "  OPTION B - install Python 3.12 from the page that is opening,"
+  echo "  then double-click this file again."
   echo ""
   open "https://www.python.org/downloads/release/python-3128/" 2>/dev/null \
     || echo "  Visit: https://www.python.org/downloads/release/python-3128/"
@@ -58,10 +63,19 @@ fi
 
 [ -f .env ] || cp .env.example .env
 
-# Port occupied by some other program? Step aside to the next port.
+# Self-heal: an interrupted first install leaves a broken venv.
+if ! ./.venv/bin/python -c "import uvicorn, fastapi" >/dev/null 2>&1; then
+  echo "  Finishing setup (this happens if a previous run was interrupted)..."
+  ./.venv/bin/python -m pip install -r requirements.txt --quiet
+fi
+
+# Port occupied by some other program? Step aside until one is free.
 if lsof -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
-  PORT=$((PORT + 1))
-  echo "  Port ${KARNA_PORT:-8000} is used by another program - using port $PORT instead."
+  ORIG="$PORT"
+  while lsof -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; do
+    PORT=$((PORT + 1))
+  done
+  echo "  Port $ORIG is used by another program - using port $PORT instead."
 fi
 
 echo "  Starting Karna OS..."

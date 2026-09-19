@@ -25,16 +25,20 @@ WINDOWS (10/11)
 MAC
 ────────────────────────────────────────────────────────────────
   ONE-TIME (2 minutes):
-   1. Install Python:  https://www.python.org/downloads/
-      (version 3.12 — newer Macs already have a working python3)
-   2. Extract this ZIP anywhere.
-   3. In the extracted folder: right-click  Start-Karna-OS.command
-      → Open. (First time only — macOS asks to confirm; click Open.
-       If it says "Permission denied", open Terminal, drag the file
-       in, press Enter, then double-click it again.)
+   1. Extract this ZIP anywhere.
+   2. Double-click  Start-Karna-OS.command
+      (First time only — macOS asks to confirm; right-click the
+      file → Open. If it says "Permission denied", open Terminal,
+      drag the file in, press Enter, then double-click again.)
+
+   → If it says Python is needed, two easy options:
+       • NOTHING TO DOWNLOAD: open Terminal (Apps > Utilities),
+         type  xcode-select --install  and approve — done in ~1 min.
+       • OR install Python 3.12 from python.org (the page opens
+         automatically). Either way, double-click the launcher again.
 
   EVERY TIME:
-   4. Double-click  Start-Karna-OS.command
+   3. Double-click  Start-Karna-OS.command
       → Your browser opens the app by itself.
       → Keep the Terminal window open while you use it.
 
